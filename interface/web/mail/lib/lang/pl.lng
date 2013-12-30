@@ -2,13 +2,13 @@
 $wb['Email Alias'] = 'Alias E-mail';
 $wb['Email Blacklist'] = 'Czarna lista E-mail';
 $wb['Blacklist'] = 'Czarna lista';
-$wb['Mail Content Filter'] = 'Zawartość filrtu E-mail';
+$wb['Mail Content Filter'] = 'Zawartość filtru E-mail';
 $wb['Filter'] = 'Filtr';
 $wb['Mail Domain'] = 'Domena E-mail';
 $wb['Domain'] = 'Domena';
 $wb['Email Catchall'] = 'E-mail Catchall';
 $wb['Email Forward'] = 'Przekierowanie E-mail';
-$wb['Get Email'] = 'Get Email';
+$wb['Get Email'] = 'Pobierz E-mail';
 $wb['Spamfilter'] = 'Filtr spamu';
 $wb['Email Routing'] = 'Ścieżka E-mail';
 $wb['Email transport'] = 'Przenieś E-mail';
@@ -42,6 +42,7 @@ $wb['Postfix Whitelist'] = 'Popraw białą listę';
 $wb['Postfix Blacklist'] = 'Popraw czarną listę';
 $wb['Content Filter'] = 'Zawartość filtru';
 $wb['Global Filters'] = 'Globalne filtry';
-$wb['Domain Alias'] = 'Domain Alias';
-$wb['Relay Recipients'] = 'Relay Recipients';
+$wb['Domain Alias'] = 'Alias domeny';
+$wb['Relay Recipients'] = 'Odbiorcy przekierowania';
+$wb['Mailbox quota'] = 'Użycie skrzynek email';
 ?>

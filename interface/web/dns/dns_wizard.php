@@ -42,12 +42,12 @@ $app->tpl->setInclude('content_tpl','templates/dns_wizard.htm');
 $app->load_language_file('/web/dns/lib/lang/'.$_SESSION['s']['language'].'_dns_wizard.lng');
 
 // import variables
-$template_id = (isset($_POST['template_id']))?intval($_POST['template_id']):0;
-$sys_groupid = (isset($_POST['client_group_id']))?intval($_POST['client_group_id']):0;
+$template_id = (isset($_POST['template_id']))?$app->functions->intval($_POST['template_id']):0;
+$sys_groupid = (isset($_POST['client_group_id']))?$app->functions->intval($_POST['client_group_id']):0;
 
 // get the correct server_id
 if($_SESSION['s']['user']['typ'] == 'admin') {
-	$server_id = (isset($_POST['server_id']))?intval($_POST['server_id']):1;
+	$server_id = (isset($_POST['server_id']))?$app->functions->intval($_POST['server_id']):1;
 } else {
 	$client_group_id = $_SESSION["s"]["user"]["default_group"];
 	$client = $app->db->queryOneRecord("SELECT default_dnsserver FROM sys_group, client WHERE sys_group.client_id = client.client_id and sys_group.groupid = $client_group_id");
@@ -56,7 +56,7 @@ if($_SESSION['s']['user']['typ'] == 'admin') {
 
 
 // Load the templates
-$records = $app->db->queryAllRecords("SELECT * FROM dns_template WHERE visible = 'Y'");
+$records = $app->db->queryAllRecords("SELECT * FROM dns_template WHERE visible = 'Y' ORDER BY name ASC");
 $template_id_option = '';
 $n = 0;
 foreach($records as $rec){
@@ -72,7 +72,7 @@ $app->tpl->setVar("template_id_option",$template_id_option);
 if($_SESSION['s']['user']['typ'] == 'admin') {
 	
 	// Load the list of servers
-	$records = $app->db->queryAllRecords("SELECT server_id, server_name FROM server WHERE dns_server = 1 ORDER BY server_name");
+	$records = $app->db->queryAllRecords("SELECT server_id, server_name FROM server WHERE mirror_server_id = 0 AND dns_server = 1 ORDER BY server_name");
 	$server_id_option = '';
 	foreach($records as $rec){
 		$checked = ($rec['server_id'] == $server_id)?' SELECTED':'';
@@ -81,14 +81,14 @@ if($_SESSION['s']['user']['typ'] == 'admin') {
 	$app->tpl->setVar("server_id",$server_id_option);
 	
 	// load the list of clients
-	$sql = "SELECT groupid, name FROM sys_group WHERE client_id > 0 ORDER BY name";
+	$sql = "SELECT sys_group.groupid, sys_group.name, CONCAT(IF(client.company_name != '', CONCAT(client.company_name, ' :: '), ''), client.contact_name, ' (', client.username, IF(client.customer_no != '', CONCAT(', ', client.customer_no), ''), ')') as contactname FROM sys_group, client WHERE sys_group.client_id = client.client_id AND sys_group.client_id > 0 ORDER BY sys_group.name";
 	$clients = $app->db->queryAllRecords($sql);
 	$client_select = '';
 	if($_SESSION["s"]["user"]["typ"] == 'admin') $client_select .= "<option value='0'></option>";
 	if(is_array($clients)) {
 		foreach( $clients as $client) {
 			$selected = ($client["groupid"] == $sys_groupid)?'SELECTED':'';
-			$client_select .= "<option value='$client[groupid]' $selected>$client[name]</option>\r\n";
+			$client_select .= "<option value='$client[groupid]' $selected>$client[contactname]</option>\r\n";
 		}
 	}
 
@@ -99,18 +99,18 @@ if ($_SESSION["s"]["user"]["typ"] != 'admin' && $app->auth->has_clients($_SESSIO
 	
 	// Get the limits of the client
 	$client_group_id = $_SESSION["s"]["user"]["default_group"];
-	$client = $app->db->queryOneRecord("SELECT client.client_id, contact_name FROM sys_group, client WHERE sys_group.client_id = client.client_id and sys_group.groupid = $client_group_id");
+	$client = $app->db->queryOneRecord("SELECT client.client_id, client.contact_name, CONCAT(IF(client.company_name != '', CONCAT(client.company_name, ' :: '), ''), client.contact_name, ' (', client.username, IF(client.customer_no != '', CONCAT(', ', client.customer_no), ''), ')') as contactname, sys_group.name FROM sys_group, client WHERE sys_group.client_id = client.client_id and sys_group.groupid = $client_group_id");
 
 	
 	// load the list of clients
-	$sql = "SELECT groupid, name FROM sys_group, client WHERE sys_group.client_id = client.client_id AND client.parent_client_id = ".$client['client_id'];
+	$sql = "SELECT sys_group.groupid, sys_group.name, CONCAT(IF(client.company_name != '', CONCAT(client.company_name, ' :: '), ''), client.contact_name, ' (', client.username, IF(client.customer_no != '', CONCAT(', ', client.customer_no), ''), ')') as contactname FROM sys_group, client WHERE sys_group.client_id = client.client_id AND client.parent_client_id = ".$client['client_id'];
 	$clients = $app->db->queryAllRecords($sql);
 	$tmp = $app->db->queryOneRecord("SELECT groupid FROM sys_group WHERE client_id = ".$client['client_id']);
-	$client_select = '<option value="'.$tmp['groupid'].'">'.$client['contact_name'].'</option>';
+	$client_select = '<option value="'.$tmp['groupid'].'">'.$client['contactname'].'</option>';
 	if(is_array($clients)) {
 		foreach( $clients as $client) {
 			$selected = ($client["groupid"] == $sys_groupid)?'SELECTED':'';
-			$client_select .= "<option value='$client[groupid]' $selected>$client[name]</option>\r\n";
+			$client_select .= "<option value='$client[groupid]' $selected>$client[contactname]</option>\r\n";
 		}
 	}
 
@@ -133,21 +133,24 @@ if($_POST['create'] == 1) {
 	$error = '';
 	
 	if(isset($_POST['domain']) && $_POST['domain'] == '') $error .= $app->lng('error_domain_empty').'<br />';
+	elseif(isset($_POST['domain']) && !preg_match('/^[\w\.\-]{2,64}\.[a-zA-Z0-9\-]{2,30}$/',$_POST['domain'])) $error .= $app->lng('error_domain_regex').'<br />';
+
 	if(isset($_POST['ip']) && $_POST['ip'] == '') $error .= $app->lng('error_ip_empty').'<br />';
+
 	if(isset($_POST['ns1']) && $_POST['ns1'] == '') $error .= $app->lng('error_ns1_empty').'<br />';
+	elseif(isset($_POST['ns1']) && !preg_match('/^[\w\.\-]{2,64}\.[a-zA-Z0-9]{2,30}$/',$_POST['ns1'])) $error .= $app->lng('error_ns1_regex').'<br />';
+
 	if(isset($_POST['ns2']) && $_POST['ns2'] == '') $error .= $app->lng('error_ns2_empty').'<br />';
+	elseif(isset($_POST['ns2']) && !preg_match('/^[\w\.\-]{2,64}\.[a-zA-Z0-9]{2,30}$/',$_POST['ns2'])) $error .= $app->lng('error_ns2_regex').'<br />';
+
 	if(isset($_POST['email']) && $_POST['email'] == '') $error .= $app->lng('error_email_empty').'<br />';
+	elseif(isset($_POST['email']) && !preg_match('/^\w+[\w.-]*\w+@\w+[\w.-]*\w+\.[a-z0-9\-]{2,30}$/i',$_POST['email'])) $error .= $app->lng('error_email_regex').'<br />';
 	
-	if(isset($_POST['domain']) && !preg_match('/^[\w\.\-]{2,64}\.[a-zA-Z]{2,10}[\.]{0,1}$/',$_POST['domain'])) $error .= $app->lng('error_domain_regex').'<br />';
-	if(isset($_POST['ns1']) && !preg_match('/^[\w\.\-]{2,64}\.[a-zA-Z]{2,10}[\.]{0,1}$/',$_POST['ns1'])) $error .= $app->lng('error_ns1_regex').'<br />';
-	if(isset($_POST['ns2']) && !preg_match('/^[\w\.\-]{2,64}\.[a-zA-Z]{2,10}[\.]{0,1}$/',$_POST['ns2'])) $error .= $app->lng('error_ns2_regex').'<br />';
-	if(isset($_POST['email']) && !preg_match('/^\w+[\w.-]*\w+@\w+[\w.-]*\w+\.[a-z]{2,10}$/i',$_POST['email'])) $error .= $app->lng('error_email_regex').'<br />';
-	
-	// make sure that the record belongs to the clinet group and not the admin group when a dmin inserts it
+	// make sure that the record belongs to the client group and not the admin group when admin inserts it
 	if($_SESSION["s"]["user"]["typ"] == 'admin' && isset($_POST['client_group_id'])) {
-		$sys_groupid = intval($_POST['client_group_id']);
+		$sys_groupid = $app->functions->intval($_POST['client_group_id']);
 	} elseif($app->auth->has_clients($_SESSION['s']['user']['userid']) && isset($_POST['client_group_id'])) {
-		$sys_groupid = intval($_POST['client_group_id']);
+		$sys_groupid = $app->functions->intval($_POST['client_group_id']);
 	} else {
 		$sys_groupid = $_SESSION["s"]["user"]["default_group"];
 	}
@@ -173,6 +176,14 @@ if($_POST['create'] == 1) {
 	if($_POST['ns1'] != '') $tpl_content = str_replace('{NS1}',$_POST['ns1'],$tpl_content);
 	if($_POST['ns2'] != '') $tpl_content = str_replace('{NS2}',$_POST['ns2'],$tpl_content);
 	if($_POST['email'] != '') $tpl_content = str_replace('{EMAIL}',$_POST['email'],$tpl_content);
+	if(isset($_POST['dkim']) && preg_match('/^[\w\.\-\/]{2,255}\.[a-zA-Z0-9\-]{2,30}[\.]{0,1}$/',$_POST['domain'])) {
+		$public_key=$app->db->queryOneRecord("SELECT dkim_public FROM mail_domain WHERE domain = '".$app->db->quote($_POST['domain'])."' AND dkim = 'y' AND ".$app->tform->getAuthSQL('r'));		
+		if ($public_key!='') {
+			$dns_record=str_replace(array("\r\n", "\n", "\r","-----BEGIN PUBLIC KEY-----","-----END PUBLIC KEY-----"),'',$public_key['dkim_public']);
+			$tpl_content = str_replace('{DKIM}','TXT|default._domainkey.'.$_POST['domain'].'.|v=DKIM1; t=s; p='.$dns_record,$tpl_content);
+		} 
+	}
+
 	
 	// Parse the template
 	$tpl_rows = explode("\n",$tpl_content);
@@ -235,10 +246,12 @@ if($_POST['create'] == 1) {
 		$minimum = $app->db->quote($vars['minimum']);
 		$ttl = $app->db->quote($vars['ttl']);
 		$xfer = $app->db->quote($vars['xfer']);
+		$also_notify = $app->db->quote($vars['also_notify']);
+		$update_acl = $app->db->quote($vars['update_acl']);
 		$serial = $app->validate_dns->increase_serial(0);
 		
-		$insert_data = "(`sys_userid`, `sys_groupid`, `sys_perm_user`, `sys_perm_group`, `sys_perm_other`, `server_id`, `origin`, `ns`, `mbox`, `serial`, `refresh`, `retry`, `expire`, `minimum`, `ttl`, `active`, `xfer`) VALUES 
-		('$sys_userid', '$sys_groupid', 'riud', 'riud', '', '$server_id', '$origin', '$ns', '$mbox', '$serial', '$refresh', '$retry', '$expire', '$minimum', '$ttl', 'Y', '$xfer')";
+		$insert_data = "(`sys_userid`, `sys_groupid`, `sys_perm_user`, `sys_perm_group`, `sys_perm_other`, `server_id`, `origin`, `ns`, `mbox`, `serial`, `refresh`, `retry`, `expire`, `minimum`, `ttl`, `active`, `xfer`, `also_notify`, `update_acl`) VALUES 
+		('$sys_userid', '$sys_groupid', 'riud', 'riud', '', '$server_id', '$origin', '$ns', '$mbox', '$serial', '$refresh', '$retry', '$expire', '$minimum', '$ttl', 'Y', '$xfer', '$also_notify', '$update_acl')";
 		$dns_soa_id = $app->db->datalogInsert('dns_soa', $insert_data, 'id');
 		
 		// Insert the dns_rr records

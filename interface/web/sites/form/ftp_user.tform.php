@@ -29,6 +29,11 @@
 	Hint:
 	The ID field of the database table is not part of the datafield definition.
 	The ID field must be always auto incement (int or bigint).
+	
+	Search:
+	- searchable = 1 or searchable = 2 include the field in the search
+	- searchable = 1: this field will be the title of the search result
+	- searchable = 2: this field will be included in the description of the search result
 
 
 */
@@ -92,7 +97,16 @@ $form["tabs"]['ftp'] = array (
 			'default'	=> '',
 			'value'		=> '',
 			'width'		=> '30',
-			'maxlength'	=> '255'
+			'maxlength'	=> '255',
+			'searchable' => 1
+		),
+		'username_prefix' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'TEXT',
+			'default'	=> '',
+			'value'		=> '',
+			'width'		=> '30',
+			'maxlength'	=> '25'
 		),
 		'password' => array (
 			'datatype'	=> 'VARCHAR',
@@ -108,6 +122,9 @@ $form["tabs"]['ftp'] = array (
 			'formtype'	=> 'TEXT',
 			'validators'	=> array ( 	0 => array (	'type'	=> 'NOTEMPTY',
 														'errmsg'=> 'quota_size_error_empty'),
+										1 => array (	'type'	=> 'REGEX',
+														'regex' => '/^(\-1|[0-9]{1,10})$/',
+														'errmsg'=> 'quota_size_error_regex'),
 									),
 			'default'	=> '-1',
 			'value'		=> '',
@@ -126,7 +143,7 @@ $form["tabs"]['ftp'] = array (
 	)
 );
 
-if($_SESSION["s"]["user"]["typ"] == 'admin') {
+if($app->auth->is_admin()) {
 
 $form["tabs"]['advanced'] = array (
     'title'     => "Options",
@@ -151,7 +168,7 @@ $form["tabs"]['advanced'] = array (
             'datatype'  => 'VARCHAR',
             'formtype'  => 'TEXT',
             'validators'    => array (  0 => array (    'type'  => 'NOTEMPTY',
-                                                        'errmsg'=> 'uid_error_empty'),
+                                                        'errmsg'=> 'gid_error_empty'),
                                     ),
             'default'   => '0',
             'value'     => '',

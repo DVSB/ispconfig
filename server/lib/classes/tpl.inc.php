@@ -928,9 +928,9 @@ if (!defined('vlibTemplateClassLoaded')) {
                 $regex.=    '[\"\']?';
                 $regex.= ')?\s*';
                 $regex.= '(?:>|\/>|}|-->){1}';
-				$regex.= '/ie';
+				$regex.= '/i';
                 //$regex.= '([\r\n|\n|\r])?/ie';
-                $data = preg_replace($regex,"\$this->_parseTag(array('\\0','\\1','\\2','\\3','\\4','\\5','\\6','\\7','\\8','\\9'));",$data);
+                $data = preg_replace_callback($regex, array($this, '_parseTag'), $data);
 
                 if ($this->_cache) { // add cache if need be
                     $this->_createCache($data);
@@ -967,7 +967,9 @@ if (!defined('vlibTemplateClassLoaded')) {
 
             // check fullpath first..
             $fullpath = $filepath.'/'.$filename;
-            if (is_file($fullpath)) return $fullpath;
+            if (is_file($fullpath)) {
+				return $fullpath;
+			}
 
             // ..then check for relative path for current directory..
             if (!empty($this->_currentincludedir)) {
@@ -992,17 +994,23 @@ if (!defined('vlibTemplateClassLoaded')) {
             // ..then check path from TEMPLATE_DIR..
             if (!empty($this->OPTIONS['TEMPLATE_DIR'])) {
                 $fullpath = realpath($this->OPTIONS['TEMPLATE_DIR'].'/'.$filepath.'/'.$filename);
-                if (is_file($fullpath)) return $fullpath;
+                if (is_file($fullpath)) {
+					return $fullpath;
+				}
             }
 
             // ..then check relative path from executing php script..
             $fullpath = realpath($filepath.'/'.$filename);
-            if (is_file($fullpath)) return $fullpath;
+            if (is_file($fullpath)) {
+				return $fullpath;
+			}
 
             // ..then check path from template file.
             if (!empty($this->VLIBTEMPLATE_ROOT)) {
                 $fullpath = realpath($this->VLIBTEMPLATE_ROOT.'/'.$filepath.'/'.$filename);
-                if (is_file($fullpath)) return $fullpath;
+                if (is_file($fullpath)) {
+					return $fullpath;
+				}
             }
 
             return false; // uh oh, file not found

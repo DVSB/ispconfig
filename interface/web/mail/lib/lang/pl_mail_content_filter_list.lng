@@ -1,5 +1,5 @@
 <?php
-$wb['list_head_txt'] = 'Popraw nagłowek oraz stronę';
+$wb['list_head_txt'] = 'Popraw nagłówek oraz stronę';
 $wb['active_txt'] = 'Aktywny';
 $wb['server_id_txt'] = 'Serwer';
 $wb['pattern_txt'] = 'Wzór';

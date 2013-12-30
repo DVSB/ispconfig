@@ -40,7 +40,31 @@ class web_module {
 									'ftp_user_delete',
 									'shell_user_insert',
 									'shell_user_update',
-									'shell_user_delete');
+									'shell_user_delete',
+									'webdav_user_insert',
+									'webdav_user_update',
+									'webdav_user_delete',
+									'web_folder_insert',
+									'web_folder_update',
+									'web_folder_delete',
+									'web_folder_user_insert',
+									'web_folder_user_update',
+									'web_folder_user_delete',
+									'web_backup_insert',
+									'web_backup_update',
+									'web_backup_delete',
+									'aps_instance_insert',
+									'aps_instance_update',
+									'aps_instance_delete',
+									'aps_instance_setting_insert',
+									'aps_instance_setting_update',
+									'aps_instance_setting_delete',
+									'aps_package_insert',
+									'aps_package_update',
+									'aps_package_delete',
+									'aps_setting_insert',
+									'aps_setting_update',
+									'aps_setting_delete');
 	
 	//* This function is called during ispconfig installation to determine
 	//  if a symlink shall be created for this plugin.
@@ -80,11 +104,20 @@ class web_module {
 		*/
 		
 		$app->modules->registerTableHook('web_domain','web_module','process');
-        $app->modules->registerTableHook('ftp_user','web_module','process');
-        $app->modules->registerTableHook('shell_user','web_module','process');
+		$app->modules->registerTableHook('ftp_user','web_module','process');
+		$app->modules->registerTableHook('shell_user','web_module','process');
+		$app->modules->registerTableHook('webdav_user','web_module','process');
+		$app->modules->registerTableHook('web_folder','web_module','process');
+		$app->modules->registerTableHook('web_folder_user','web_module','process');
+		$app->modules->registerTableHook('web_backup','web_module','process');
+		$app->modules->registerTableHook('aps_instances','web_module','process');
+		$app->modules->registerTableHook('aps_instances_settings','web_module','process');
+		$app->modules->registerTableHook('aps_packages','web_module','process');
+		$app->modules->registerTableHook('aps_settings','web_module','process');
 		
 		// Register service
 		$app->services->registerService('httpd','web_module','restartHttpd');
+		$app->services->registerService('php-fpm','web_module','restartPHP_FPM');
 		
 	}
 	
@@ -112,27 +145,94 @@ class web_module {
 				if($action == 'u') $app->plugins->raiseEvent('shell_user_update',$data);
 				if($action == 'd') $app->plugins->raiseEvent('shell_user_delete',$data);
 			break;
+			case 'webdav_user':
+				if($action == 'i') $app->plugins->raiseEvent('webdav_user_insert',$data);
+				if($action == 'u') $app->plugins->raiseEvent('webdav_user_update',$data);
+				if($action == 'd') $app->plugins->raiseEvent('webdav_user_delete',$data);
+			break;
+			case 'web_folder':
+				if($action == 'i') $app->plugins->raiseEvent('web_folder_insert',$data);
+				if($action == 'u') $app->plugins->raiseEvent('web_folder_update',$data);
+				if($action == 'd') $app->plugins->raiseEvent('web_folder_delete',$data);
+			break;
+			case 'web_folder_user':
+				if($action == 'i') $app->plugins->raiseEvent('web_folder_user_insert',$data);
+				if($action == 'u') $app->plugins->raiseEvent('web_folder_user_update',$data);
+				if($action == 'd') $app->plugins->raiseEvent('web_folder_user_delete',$data);
+			break;
+			case 'web_backup':
+				if($action == 'i') $app->plugins->raiseEvent('web_backup_insert',$data);
+				if($action == 'u') $app->plugins->raiseEvent('web_backup_update',$data);
+				if($action == 'd') $app->plugins->raiseEvent('web_backup_delete',$data);
+			break;
+			case 'aps_instances':
+				if($action == 'i') $app->plugins->raiseEvent('aps_instance_insert',$data);
+				if($action == 'u') $app->plugins->raiseEvent('aps_instance_update',$data);
+				if($action == 'd') $app->plugins->raiseEvent('aps_instance_delete',$data);
+			break;
+			case 'aps_instances_settings':
+				if($action == 'i') $app->plugins->raiseEvent('aps_instance_setting_insert',$data);
+				if($action == 'u') $app->plugins->raiseEvent('aps_instance_setting_update',$data);
+				if($action == 'd') $app->plugins->raiseEvent('aps_instance_setting_delete',$data);
+			break;
+			case 'aps_packages':
+				if($action == 'i') $app->plugins->raiseEvent('aps_package_insert',$data);
+				if($action == 'u') $app->plugins->raiseEvent('aps_package_update',$data);
+				if($action == 'd') $app->plugins->raiseEvent('aps_package_delete',$data);
+			break;
+			case 'aps_settings':
+				if($action == 'i') $app->plugins->raiseEvent('aps_setting_insert',$data);
+				if($action == 'u') $app->plugins->raiseEvent('aps_setting_update',$data);
+				if($action == 'd') $app->plugins->raiseEvent('aps_setting_delete',$data);
+			break;
 		} // end switch
 	} // end function
 	
 	
 	// This function is used
 	function restartHttpd($action = 'restart') {
-		global $app;
+		global $app,$conf;
 		
-		$command = '';
-		if(is_file('/etc/init.d/httpd')) {
-			$command = '/etc/init.d/httpd';
-		} else {
-			$command = '/etc/init.d/apache2';
+		// load the server configuration options
+		$app->uses('getconf');
+		$web_config = $app->getconf->get_server_config($conf['server_id'], 'web');
+		
+		$daemon = '';
+		switch ($web_config['server_type']) {
+			case 'nginx':
+				$daemon = $web_config['server_type'];
+				break;
+			default:
+				if(is_file($conf['init_scripts'] . '/' . 'httpd')) {
+					$daemon = 'httpd';
+				} else {
+					$daemon = 'apache2';
+				}
 		}
-		
+
+		$retval = array('output' => '', 'retval' => 0);
 		if($action == 'restart') {
-			exec($command.' restart');
+			exec($conf['init_scripts'] . '/' . $daemon . ' restart 2>&1', $retval['output'], $retval['retval']);
 		} else {
-			exec($command.' reload');
+			exec($conf['init_scripts'] . '/' . $daemon . ' reload 2>&1', $retval['output'], $retval['retval']);
 		}
+		return $retval;
+	}
+	
+	function restartPHP_FPM($action = 'restart') {
+		global $app,$conf;
 		
+		// load the server configuration options
+		$app->uses('getconf');
+		$web_config = $app->getconf->get_server_config($conf['server_id'], 'web');
+		
+		list($action, $init_script) = explode(':', $action);
+		
+		if(!$init_script) $init_script = $conf['init_scripts'].'/'.$web_config['php_fpm_init_script'];
+		
+		$retval = array('output' => '', 'retval' => 0);
+		exec($init_script.' '.$action.' 2>&1', $retval['output'], $retval['retval']);
+		return $retval;
 	}
 
 } // end class

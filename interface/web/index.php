@@ -28,13 +28,54 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-error_reporting(E_ALL|E_STRICT);
-
 require_once('../lib/config.inc.php');
 require_once('../lib/app.inc.php');
 
+if(!isset($_SESSION['s']['module']['name'])) $_SESSION['s']['module']['name'] = 'login';
+
 $app->uses('tpl');
 $app->tpl->newTemplate('main.tpl.htm');
+
+// tab change warning?
+// read misc config
+$app->uses('getconf');
+$sys_config = $app->getconf->get_global_config('misc');
+if($sys_config['tab_change_warning'] == 'y') {
+    $app->tpl->setVar('tabchange_warning_enabled', 'y');
+    $app->tpl->setVar('global_tabchange_warning_txt', $app->lng('global_tabchange_warning_txt'));
+} else {
+    $app->tpl->setVar('tabchange_warning_enabled', 'n');
+}
+$app->tpl->setVar('tabchange_discard_enabled', $sys_config['tab_change_discard']);
+if($sys_config['tab_change_discard'] == 'y') {
+    $app->tpl->setVar('global_tabchange_discard_txt', $app->lng('global_tabchange_discard_txt'));
+}
+
+if(isset($_SESSION['show_info_msg'])) {
+    $app->tpl->setVar('show_info_msg', $_SESSION['show_info_msg']);
+    unset($_SESSION['show_info_msg']);
+}
+if(isset($_SESSION['show_error_msg'])) {
+    $app->tpl->setVar('show_error_msg', $_SESSION['show_error_msg']);
+    unset($_SESSION['show_error_msg']);
+}
+
+// read js.d files
+$js_d = ISPC_WEB_PATH . '/js/js.d';
+$js_d_files = array();
+if(@is_dir($js_d)) {
+    $dir = opendir($js_d);
+    while($file = readdir($dir)) {
+        $filename = $js_d . '/' . $file;
+        if($file === '.' || $file === '..' || !is_file($filename)) continue;
+        if(substr($file, -3) !== '.js') continue;
+        $js_d_files[] = array('file' => $file);
+    }
+    closedir($dir);
+}
+
+$app->tpl->setLoop('js_d_includes', $js_d_files);
+unset($js_d_files);
 
 $app->tpl_defaults();
 $app->tpl->pparse();

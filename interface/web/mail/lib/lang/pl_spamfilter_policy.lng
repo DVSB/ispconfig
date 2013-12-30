@@ -30,9 +30,9 @@ $wb['warnbannedrecip_txt'] = 'Ostrzeż odbiorcę o zablokowanej trści';
 $wb['warnbadhrecip_txt'] = 'Ostrzeż odbiorcę o złych nagłówkach';
 $wb['newvirus_admin_txt'] = 'Admin obsługi nowych wirusów';
 $wb['virus_admin_txt'] = 'Admin obsługi wirusów';
-$wb['banned_admin_txt'] = 'Admin obłsugi zablokowanych treści';
+$wb['banned_admin_txt'] = 'Admin obsługi zablokowanych treści';
 $wb['bad_header_admin_txt'] = 'Admin obsługi złych nagłowków';
 $wb['spam_admin_txt'] = 'Admin obsługi spamu';
 $wb['message_size_limit_txt'] = 'Limit wielkości wiadomości';
-$wb['banned_rulenames_txt'] = 'Zabrobione nazwy zasad';
+$wb['banned_rulenames_txt'] = 'Zabronione nazwy zasad';
 ?>

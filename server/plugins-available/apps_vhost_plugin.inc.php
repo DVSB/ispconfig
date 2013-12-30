@@ -39,7 +39,11 @@ class apps_vhost_plugin {
 	function onInstall() {
 		global $conf;
 		
-		return true;
+		if($conf['services']['web'] == true) {
+			return true;
+		} else {
+			return false;
+		}
 		
 	}
 	
@@ -75,35 +79,105 @@ class apps_vhost_plugin {
 		$app->uses("getconf");
 		$web_config = $app->getconf->get_server_config($conf["server_id"], 'web');
 				
-		// Dont just copy over the virtualhost template but add some custom settings
-        $content = file_get_contents($conf["rootpath"]."/conf/apache_apps.vhost.master");
+		if($web_config['server_type'] == 'apache'){
+			// Dont just copy over the virtualhost template but add some custom settings
+			if(file_exists($conf["rootpath"]."/conf-custom/apache_apps.vhost.master")) {
+				$content = file_get_contents($conf["rootpath"]."/conf-custom/apache_apps.vhost.master");
+			} else {
+				$content = file_get_contents($conf["rootpath"]."/conf/apache_apps.vhost.master");
+			}
+			
 		
-		$vhost_conf_dir = $web_config['vhost_conf_dir'];
-        $vhost_conf_enabled_dir = $web_config['vhost_conf_enabled_dir'];
-		$apps_vhost_servername = ($web_config['apps_vhost_servername'] == '')?'':'ServerName '.$web_config['apps_vhost_servername'];
+			$vhost_conf_dir = $web_config['vhost_conf_dir'];
+			$vhost_conf_enabled_dir = $web_config['vhost_conf_enabled_dir'];
+			$apps_vhost_servername = ($web_config['apps_vhost_servername'] == '')?'':'ServerName '.$web_config['apps_vhost_servername'];
 		
-		$web_config['apps_vhost_port'] = (empty($web_config['apps_vhost_port']))?8081:$web_config['apps_vhost_port'];
-		$web_config['apps_vhost_ip'] = (empty($web_config['apps_vhost_ip']))?'_default_':$web_config['apps_vhost_ip'];
+			$web_config['apps_vhost_port'] = (empty($web_config['apps_vhost_port']))?8081:$web_config['apps_vhost_port'];
+			$web_config['apps_vhost_ip'] = (empty($web_config['apps_vhost_ip']))?'_default_':$web_config['apps_vhost_ip'];
 		
-		$content = str_replace('{apps_vhost_ip}', $web_config['apps_vhost_ip'], $content);
-		$content = str_replace('{apps_vhost_port}', $web_config['apps_vhost_port'], $content);
-		$content = str_replace('{apps_vhost_dir}', $web_config['website_basedir'].'/apps', $content);
-		$content = str_replace('{apps_vhost_servername}', $apps_vhost_servername, $content);
-		$content = str_replace('{apps_vhost_basedir}', $web_config['website_basedir'], $content);
+			$content = str_replace('{apps_vhost_ip}', $web_config['apps_vhost_ip'], $content);
+			$content = str_replace('{apps_vhost_port}', $web_config['apps_vhost_port'], $content);
+			$content = str_replace('{apps_vhost_dir}', $web_config['website_basedir'].'/apps', $content);
+			$content = str_replace('{apps_vhost_servername}', $apps_vhost_servername, $content);
+			$content = str_replace('{apps_vhost_basedir}', $web_config['website_basedir'], $content);
 		
 		
-		// comment out the listen directive if port is 80 or 443
-		if($web_config['apps_vhost_ip'] == 80 or $web_config['apps_vhost_ip'] == 443) {
-			$content = str_replace('{vhost_port_listen}', '#', $content);
-		} else {
-			$content = str_replace('{vhost_port_listen}', '', $content);
+			// comment out the listen directive if port is 80 or 443
+			if($web_config['apps_vhost_port'] == 80 or $web_config['apps_vhost_port'] == 443) {
+				$content = str_replace('{vhost_port_listen}', '#', $content);
+			} else {
+				$content = str_replace('{vhost_port_listen}', '', $content);
+			}
+			
+			file_put_contents("$vhost_conf_dir/apps.vhost", $content);
+			$app->services->restartServiceDelayed('httpd','restart');
 		}
 		
-		file_put_contents("$vhost_conf_dir/apps.vhost", $content);
+		if($web_config['server_type'] == 'nginx'){
+			// Dont just copy over the virtualhost template but add some custom settings
+			if(file_exists($conf["rootpath"]."/conf-custom/nginx_apps.vhost.master")) {
+				$content = file_get_contents($conf["rootpath"]."/conf-custom/nginx_apps.vhost.master");
+			} else {
+				$content = file_get_contents($conf["rootpath"]."/conf/nginx_apps.vhost.master");
+			}
 		
-		$app->services->restartServiceDelayed('httpd','restart');
+			$vhost_conf_dir = $web_config['nginx_vhost_conf_dir'];
+			$vhost_conf_enabled_dir = $web_config['nginx_vhost_conf_enabled_dir'];
+			$apps_vhost_servername = ($web_config['apps_vhost_servername'] == '')?'_':$web_config['apps_vhost_servername'];
+			
+			$apps_vhost_user = 'ispapps';
+			$apps_vhost_group = 'ispapps';
 		
+			$web_config['apps_vhost_port'] = (empty($web_config['apps_vhost_port']))?8081:$web_config['apps_vhost_port'];
+			$web_config['apps_vhost_ip'] = (empty($web_config['apps_vhost_ip']))?'_default_':$web_config['apps_vhost_ip'];
+			
+			if($web_config['apps_vhost_ip'] == '_default_'){
+				$apps_vhost_ip = '';
+			} else {
+				$apps_vhost_ip = $web_config['apps_vhost_ip'].':';
+			}
+			
+			$socket_dir = escapeshellcmd($web_config['php_fpm_socket_dir']);
+			if(substr($socket_dir,-1) != '/') $socket_dir .= '/';
+			if(!is_dir($socket_dir)) exec('mkdir -p '.$socket_dir);
+			$fpm_socket = $socket_dir.'apps.sock';
+			$cgi_socket = escapeshellcmd($web_config['nginx_cgi_socket']);
 		
+			$content = str_replace('{apps_vhost_ip}', $apps_vhost_ip, $content);
+			$content = str_replace('{apps_vhost_port}', $web_config['apps_vhost_port'], $content);
+			$content = str_replace('{apps_vhost_dir}', $web_config['website_basedir'].'/apps', $content);
+			$content = str_replace('{apps_vhost_servername}', $apps_vhost_servername, $content);
+			//$content = str_replace('{fpm_port}', $web_config['php_fpm_start_port']+1, $content);
+			$content = str_replace('{fpm_socket}', $fpm_socket, $content);
+			$content = str_replace('{cgi_socket}', $cgi_socket, $content);
+			if(file_exists('/var/run/php5-fpm.sock')){
+				$use_tcp = '#';
+				$use_socket = '';
+			} else {
+				$use_tcp = '';
+				$use_socket = '#';
+			}
+			$content = str_replace('{use_tcp}', $use_tcp, $content);
+			$content = str_replace('{use_socket}', $use_socket, $content);
+			
+			// PHP-FPM
+			// Dont just copy over the php-fpm pool template but add some custom settings
+			if(file_exists($conf["rootpath"]."/conf-custom/apps_php_fpm_pool.conf.master")) {
+				$fpm_content = file_get_contents($conf["rootpath"]."/conf-custom/apps_php_fpm_pool.conf.master");
+			} else {
+				$fpm_content = file_get_contents($conf["rootpath"]."/conf/apps_php_fpm_pool.conf.master");
+			}
+			
+			$fpm_content = str_replace('{fpm_pool}', 'apps', $fpm_content);
+			//$fpm_content = str_replace('{fpm_port}', $web_config['php_fpm_start_port']+1, $fpm_content);
+			$fpm_content = str_replace('{fpm_socket}', $fpm_socket, $fpm_content);
+			$fpm_content = str_replace('{fpm_user}', $apps_vhost_user, $fpm_content);
+			$fpm_content = str_replace('{fpm_group}', $apps_vhost_group, $fpm_content);
+			file_put_contents($web_config['php_fpm_pool_dir'].'/apps.conf', $fpm_content);
+			
+			file_put_contents("$vhost_conf_dir/apps.vhost", $content);
+			$app->services->restartServiceDelayed('httpd','reload');
+		}
 	}
 	
 

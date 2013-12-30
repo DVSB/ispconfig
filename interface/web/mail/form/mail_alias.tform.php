@@ -29,6 +29,11 @@
 	Hint:
 	The ID field of the database table is not part of the datafield definition.
 	The ID field must be always auto incement (int or bigint).
+	
+	Search:
+	- searchable = 1 or searchable = 2 include the field in the search
+	- searchable = 1: this field will be the title of the search result
+	- searchable = 2: this field will be included in the description of the search result
 
 
 */
@@ -69,17 +74,32 @@ $form["tabs"]['alias'] = array (
 		'source' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
+            'filters'   => array( 0 => array( 'event' => 'SAVE',
+                                              'type' => 'IDNTOASCII'),
+                                  1 => array( 'event' => 'SHOW',
+                                              'type' => 'IDNTOUTF8'),
+                                  2 => array( 'event' => 'SAVE',
+                                              'type' => 'TOLOWER')
+                                ),
 			'validators'	=> array ( 	0 => array (	'type'	=> 'ISEMAIL',
 														'errmsg'=> 'email_error_isemail'),
 									),
 			'default'	=> '',
 			'value'		=> '',
 			'width'		=> '30',
-			'maxlength'	=> '255'
+			'maxlength'	=> '255',
+			'searchable' => 1
 		),
 		'destination' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'SELECT',
+            'filters'   => array( 0 => array( 'event' => 'SAVE',
+                                              'type' => 'IDNTOASCII'),
+                                  1 => array( 'event' => 'SHOW',
+                                              'type' => 'IDNTOUTF8'),
+                                  2 => array( 'event' => 'SAVE',
+                                              'type' => 'TOLOWER')
+                                ),
 			'default'	=> '',
 			'datasource'	=> array ( 	'type'			=> 'SQL',
 										'querystring' 	=> 'SELECT email FROM mail_user WHERE {AUTHSQL} ORDER BY email',
@@ -89,7 +109,8 @@ $form["tabs"]['alias'] = array (
 			'validators'	=> array ( 	0 => array (	'type'	=> 'ISEMAIL',
 														'errmsg'=> 'destination_error_isemail'),
 									),
-			'value'		=> ''
+			'value'		=> '',
+			'searchable' => 2
 		),
 		'type' => array (
 			'datatype'	=> 'VARCHAR',

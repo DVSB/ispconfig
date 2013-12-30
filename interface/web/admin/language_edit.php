@@ -35,6 +35,7 @@ $app->auth->check_module_permissions('admin');
 
 //* This is only allowed for administrators
 if(!$app->auth->is_admin()) die('only allowed for administrators.');
+if($conf['demo_mode'] == true) $app->error('This function is disabled in demo mode.');
 
 $app->uses('tpl');
 
@@ -56,9 +57,9 @@ if(isset($_POST['records']) && is_array($_POST['records'])) {
 	$file_content = "<?php\n";
 	foreach($_POST['records'] as $key => $val) {
 		$val = stripslashes($val);
-		$val = str_replace("'",'',$val);
-		$val = str_replace('"','',$val);
-		$file_content .= '$wb['."'$key'".'] = '."'$val';\n";
+		$val = str_replace('"','\"',$val);
+		$val = str_replace('$','',$val);
+		$file_content .= '$wb['."'$key'".'] = "'.$val.'";'."\n";
 		$msg = 'File saved.';
 	}
 	$file_content .= "?>\n";
@@ -84,7 +85,7 @@ $app->tpl->setVar("file_path", $file_path);
 $keyword_list = array();
 if(isset($wb) && is_array($wb)) {
 	foreach($wb as $key => $val) {
-		$keyword_list[] = array('key' => $key, 'val' => $val);
+		$keyword_list[] = array('key' => $key, 'val' => htmlentities($val,ENT_COMPAT | ENT_HTML401,'UTF-8'));
 	}
 
 	$app->tpl->setLoop('records', $keyword_list);

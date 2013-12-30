@@ -32,6 +32,7 @@
 
 
 */
+global $app;
 
 $form["title"] 			= "Email filter";
 $form["description"] 	= "";
@@ -48,7 +49,7 @@ $form["auth_preset"]["userid"]  = 0; // 0 = id of the user, > 0 id must match wi
 $form["auth_preset"]["groupid"] = 0; // 0 = default groupid of the user, > 0 id must match with groupid of current user
 $form["auth_preset"]["perm_user"] = 'riud'; //r = read, i = insert, u = update, d = delete
 $form["auth_preset"]["perm_group"] = 'riud'; //r = read, i = insert, u = update, d = delete
-$form["auth_preset"]["perm_other"] = 'r'; //r = read, i = insert, u = update, d = delete
+$form["auth_preset"]["perm_other"] = ''; //r = read, i = insert, u = update, d = delete
 
 $form["tabs"]['filter'] = array (
 	'title' 	=> "Filter",
@@ -61,7 +62,7 @@ $form["tabs"]['filter'] = array (
 		'mailuser_id' => array (
 			'datatype'	=> 'INTEGER',
 			'formtype'	=> 'TEXT',
-			'default'	=> @intval($_REQUEST["mailuser_id"]),
+			'default'	=> @$app->functions->intval($_REQUEST["mailuser_id"]),
 			'value'		=> '',
 			'width'		=> '30',
 			'maxlength'	=> '255'
@@ -81,13 +82,14 @@ $form["tabs"]['filter'] = array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'SELECT',
 			'default'	=> '',
-			'value'		=> array('Subject' => 'Subject','From'=>'From','To'=>'To')
+			'value'		=> array('Subject' => 'subject_txt','From'=>'from_txt','To'=>'to_txt')
 		),
 		'op' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'SELECT',
 			'default'	=> '',
-			'value'		=> array('contains'=>'Contains','is' => 'Is','begins'=>'Begins with','ends'=>'Ends with')
+			#'value'		=> array('contains'=>'contains_txt','is' => 'Is','begins'=>'Begins with','ends'=>'Ends with')
+			'value'		=> array('contains'=>'contains_txt','is' => 'is_txt','begins'=>'begins_with_txt','ends'=>'ends_with_txt')
 		),
 		'searchterm' => array (
 			'datatype'	=> 'VARCHAR',
@@ -104,13 +106,13 @@ $form["tabs"]['filter'] = array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'SELECT',
 			'default'	=> '',
-			'value'		=> array('move' => 'Move to','delete'=>'Delete')
+			'value'		=> array('move' => 'move_to_txt','delete'=>'delete_txt')
 		),
 		'target' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
 			'validators'	=> array ( 	0 => array (	'type'	=> 'REGEX',
-														'regex' => '/^[a-zA-Z0-9\.\-\_\ ]{0,100}$/',
+														'regex' => '/^[\p{Latin}0-9\.\-\_\ ]{0,100}$/u',
 														'errmsg'=> 'target_error_regex'),
 									),
 			'default'	=> '',

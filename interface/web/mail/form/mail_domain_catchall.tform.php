@@ -29,6 +29,11 @@
 	Hint:
 	The ID field of the database table is not part of the datafield definition.
 	The ID field must be always auto incement (int or bigint).
+	
+	Search:
+	- searchable = 1 or searchable = 2 include the field in the search
+	- searchable = 1: this field will be the title of the search result
+	- searchable = 2: this field will be included in the description of the search result
 
 
 */
@@ -69,32 +74,50 @@ $form["tabs"]['catchall'] = array (
 		'source' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
+            'filters'   => array( 0 => array( 'event' => 'SAVE',
+                                              'type' => 'IDNTOASCII'),
+                                  1 => array( 'event' => 'SHOW',
+                                              'type' => 'IDNTOUTF8'),
+                                  2 => array( 'event' => 'SAVE',
+                                              'type' => 'TOLOWER')
+                                ),
 			'validators'	=> array ( 	0 => array (	'type'	=> 'NOTEMPTY',
 														'errmsg'=> 'domain_error_empty'),
 										1 => array (	'type'	=> 'UNIQUE',
 														'errmsg'=> 'domain_error_unique'),
 										2 => array (	'type'	=> 'REGEX',
-														'regex' => '/^\@[\w\.\-]{2,255}\.[a-zA-Z]{2,10}$/',
+														'regex' => '/^\@[\w\.\-]{2,255}\.[a-zA-Z\-]{2,30}$/',
 														'errmsg'=> 'domain_error_regex'),
 									),
 			'default'	=> '',
 			'value'		=> '',
 			'width'		=> '30',
-			'maxlength'	=> '255'
+			'maxlength'	=> '255',
+			'searchable' => 1
 		),
 		'destination' => array (
 			'datatype'	=> 'VARCHAR',
-			'formtype'	=> 'SELECT',
+			'formtype'	=> 'TEXT',
+            'filters'   => array( 0 => array( 'event' => 'SAVE',
+                                              'type' => 'IDNTOASCII'),
+                                  1 => array( 'event' => 'SHOW',
+                                              'type' => 'IDNTOUTF8'),
+                                  2 => array( 'event' => 'SAVE',
+                                              'type' => 'TOLOWER')
+                                ),
 			'default'	=> '',
+			/*
 			'datasource'	=> array ( 	'type'			=> 'SQL',
 										'querystring' 	=> 'SELECT email FROM mail_user WHERE {AUTHSQL} ORDER BY email',
 										'keyfield'		=> 'email',
 										'valuefield'	=> 'email'
 									 ),
+			*/
 			'validators'	=> array ( 	0 => array (	'type'	=> 'ISEMAIL',
 														'errmsg'=> 'destination_error_isemail'),
 									),
-			'value'		=> ''
+			'value'		=> '',
+			'searchable' => 2
 		),
 		'type' => array (
 			'datatype'	=> 'VARCHAR',

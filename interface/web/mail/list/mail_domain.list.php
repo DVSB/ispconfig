@@ -13,7 +13,11 @@
 
 
 // Name of the list
-$liste["name"] 				= "mail_domain";
+if($_SESSION['s']['user']['typ'] == 'admin') {
+	$liste["name"] 				= "mail_domain_admin";
+} else {
+	$liste["name"] 				= "mail_domain";
+}
 
 // Database table
 $liste["table"] 			= "mail_domain";
@@ -25,7 +29,7 @@ $liste["table_idx"]			= "domain_id";
 $liste["search_prefix"] 	= "search_";
 
 // Records per page
-$liste["records_per_page"] 	= 15;
+$liste["records_per_page"] 	= "15";
 
 // Script File of the list
 $liste["file"]				= "mail_domain_list.php";
@@ -58,6 +62,22 @@ $liste["item"][] = array(	'field'		=> "active",
 							'value'		=> array('y' => "<div id=\"ir-Yes\" class=\"swap\"><span>Yes</span></div>", 'n' => "<div class=\"swap\" id=\"ir-No\"><span>No</span></div>"));
 
 
+if($_SESSION['s']['user']['typ'] == 'admin') {
+$liste["item"][] = array(	'field'		=> "sys_groupid",
+							'datatype'	=> "INTEGER",
+							'formtype'	=> "SELECT",
+							'op'		=> "=",
+							'prefix'	=> "",
+							'suffix'	=> "",
+							'datasource'	=> array ( 	'type'	=> 'SQL',
+														'querystring' => 'SELECT groupid, name FROM sys_group WHERE groupid != 1 ORDER BY name',
+														'keyfield'=> 'groupid',
+														'valuefield'=> 'name'
+									 				  ),
+							'width'		=> "",
+							'value'		=> "");
+}
+
 
 $liste["item"][] = array(	'field'		=> "server_id",
 							'datatype'	=> "VARCHAR",
@@ -66,7 +86,7 @@ $liste["item"][] = array(	'field'		=> "server_id",
 							'prefix'	=> "%",
 							'suffix'	=> "%",
 							'datasource'	=> array ( 	'type'	=> 'SQL',
-														'querystring' => 'SELECT server_id,server_name FROM server WHERE {AUTHSQL} ORDER BY server_name',
+														'querystring' => 'SELECT a.server_id, a.server_name FROM server a, mail_domain b WHERE (a.server_id = b.server_id) AND ({AUTHSQL-B}) ORDER BY a.server_name',
 														'keyfield'=> 'server_id',
 														'valuefield'=> 'server_name'
 									 				  ),
@@ -75,6 +95,9 @@ $liste["item"][] = array(	'field'		=> "server_id",
 
 $liste["item"][] = array(	'field'		=> "domain",
 							'datatype'	=> "VARCHAR",
+                            'filters'   => array( 0 => array( 'event' => 'SHOW',
+                                                              'type' => 'IDNTOUTF8')
+                                                ),
 							'formtype'	=> "TEXT",
 							'op'		=> "like",
 							'prefix'	=> "%",

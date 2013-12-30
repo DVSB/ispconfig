@@ -32,13 +32,29 @@ $form["list_default"]	= "support_message_list.php";
 //* be set to yes in most cases
 $form["auth"]			= 'yes'; // yes / no
 
-//* Authentocation presets. The defaults below does not need to be changed in most cases.
+//* Authentication presets. The defaults below does not need to be changed in most cases.
 $form["auth_preset"]["userid"]  = 0; // 0 = id of the user, > 0 id must match with id of current user
 $form["auth_preset"]["groupid"] = 0; // 0 = default groupid of the user, > 0 id must match with groupid of current user
 $form["auth_preset"]["perm_user"] = 'riud'; //r = read, i = insert, u = update, d = delete
 $form["auth_preset"]["perm_group"] = 'riud'; //r = read, i = insert, u = update, d = delete
 $form["auth_preset"]["perm_other"] = ''; //r = read, i = insert, u = update, d = delete
 
+
+//* Maybe we're writing in a response to another message
+$sm_default_recipient_id = '';
+$sm_default_subject = '';
+if(isset($_GET['reply']))
+{
+	$sm_msg_id = preg_replace("/[^0-9]/","",$_GET['reply']);
+	$res = $app->db->queryOneRecord("SELECT sender_id, subject FROM support_message WHERE support_message_id=$sm_msg_id");
+	if($res['sender_id'])
+	{
+		$sm_default_recipient_id = $res['sender_id'];	
+		$sm_default_subject = (preg_match("/^Re:/",$res['subject'])?"":"Re: ") . $res['subject'];
+	}
+}
+
+$authsql = $app->tform->getAuthSQL('r', 'client');
 
 //* Begin of the form definition of the first tab. The name of the tab is called "message". We refer
 //* to this name in the $form["tab_default"] setting above.
@@ -53,16 +69,16 @@ $form["tabs"]['message'] = array (
 		'recipient_id' => array (
 			'datatype'	=> 'INTEGER',
 			'formtype'	=> 'SELECT',
-			'default'	=> '',
+			'default'	=> $sm_default_recipient_id,
 			'datasource'	=> array ( 	'type'			=> 'SQL',
-										'querystring' 	=> 'SELECT userid,username FROM sys_user WHERE {AUTHSQL} ORDER BY username',
+										'querystring' 	=> "SELECT sys_user.userid, CONCAT(IF(client.company_name != '', CONCAT(client.company_name, ' :: '), ''), client.contact_name, ' (', client.username, IF(client.customer_no != '', CONCAT(', ', client.customer_no), ''), ')') as contactname FROM sys_user, client WHERE sys_user.userid != 1 AND sys_user.client_id = client.client_id AND $authsql ORDER BY sys_user.username",
 										'keyfield'		=> 'userid',
-										'valuefield'	=> 'username'
+										'valuefield'	=> 'contactname'
 									 ),
 			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
 														'errmsg'=> 'recipient_id_is_not_integer'),
 									),
-			'value'		=> ''
+			'value'		=> ($_SESSION['s']['user']['typ'] != 'admin')?array(1 => 'Administrator'):''
 		),
 		'sender_id' => array (
 			'datatype'	=> 'INTEGER',
@@ -84,7 +100,7 @@ $form["tabs"]['message'] = array (
 			'validators'	=> array ( 	0 => array (	'type'	=> 'NOTEMPTY',
 														'errmsg'=> 'subject_is_empty'),
 									),
-			'default'	=> '',
+			'default'	=> $sm_default_subject,
 			'value'		=> '',
 			'width'		=> '30',
 			'maxlength'	=> '255'

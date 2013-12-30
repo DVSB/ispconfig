@@ -29,6 +29,11 @@
 	Hint:
 	The ID field of the database table is not part of the datafield definition.
 	The ID field must be always auto incement (int or bigint).
+	
+	Search:
+	- searchable = 1 or searchable = 2 include the field in the search
+	- searchable = 1: this field will be the title of the search result
+	- searchable = 2: this field will be included in the description of the search result
 
 
 */
@@ -72,18 +77,23 @@ $form["tabs"]['domain'] = array (
 		'domain' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
-			'validators'	=> array ( 	0 => array (	'type'	=> 'NOTEMPTY',
-														'errmsg'=> 'domain_error_empty'),
-										1 => array (	'type'	=> 'UNIQUE',
-														'errmsg'=> 'domain_error_unique'),
-										2 => array (	'type'	=> 'REGEX',
-														'regex' => '/^[\w\.\-]{2,255}\.[a-zA-Z]{2,10}$/',
-														'errmsg'=> 'domain_error_regex'),
-									),
+            'filters'   => array( 0 => array( 'event' => 'SAVE',
+                                              'type' => 'IDNTOASCII'),
+                                  1 => array( 'event' => 'SHOW',
+                                              'type' => 'IDNTOUTF8'),
+                                  2 => array( 'event' => 'SAVE',
+                                              'type' => 'TOLOWER')
+                                ),
+            'validators'    => array (  0 => array (    'type'  => 'CUSTOM',
+                                                        'class' => 'validate_domain',
+                                                        'function' => 'sub_domain',
+                                                        'errmsg'=> 'domain_error_regex'),
+                                    ),
 			'default'	=> '',
 			'value'		=> '',
 			'width'		=> '30',
-			'maxlength'	=> '255'
+			'maxlength'	=> '255',
+			'searchable' => 1
 		),
 		'type' => array (
 			'datatype'	=> 'VARCHAR',
@@ -100,19 +110,20 @@ $form["tabs"]['domain'] = array (
 										'keyfield'=> 'domain_id',
 										'valuefield'=> 'domain'
 									 ),
-			'value'		=> ''
+			'value'		=> '',
+			'searchable' => 2
 		),
 		'redirect_type' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'SELECT',
 			'default'	=> 'y',
-			'value'		=> array('' => 'No redirect', 'no' => 'No flag', 'R' => 'R', 'L' => 'L', 'R,L' => 'R,L')
+			'value'		=> array('' => 'no_redirect_txt', 'no' => 'no_flag_txt', 'R' => 'R', 'L' => 'L', 'R,L' => 'R,L', 'R=301,L' => 'R=301,L', 'last' => 'last', 'break' => 'break', 'redirect' => 'redirect', 'permanent' => 'permanent', 'proxy' => 'proxy')
 		),
 		'redirect_path' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
 			'validators'	=> array ( 	0 => array (	'type'	=> 'REGEX',
-														'regex' => '@^(([.]{0})|(https?://([-\w\.]+)+(:\d+)?(/([\w/_\.\-\,]*(\?\S+)?)?)?)|(/[\w/_\.\-]{1,255}/))$@',
+														'regex' => '@^(([\.]{0})|((ftp|https?)://([-\w\.]+)+(:\d+)?(/([\w/_\.\-\,\+\?\~!:%]*(\?\S+)?)?)?)|(\[scheme\]://([-\w\.]+)+(:\d+)?(/([\w/_\.\-\,\+\?\~!:%]*(\?\S+)?)?)?)|(/(?!.*\.\.)[\w/_\.\-]{1,255}/))$@',
 														'errmsg'=> 'redirect_error_regex'),
 									),
 			'default'	=> '',
@@ -131,6 +142,33 @@ $form["tabs"]['domain'] = array (
 	##################################
 	)
 );
+
+if($_SESSION["s"]["user"]["typ"] == 'admin') {
+
+$form["tabs"]['advanced'] = array (
+	'title' 	=> "Options",
+	'width' 	=> 100,
+	'template' 	=> "templates/web_subdomain_advanced.htm",
+	'readonly'	=> false,
+	'fields' 	=> array (
+	##################################
+	# Begin Datatable fields
+	##################################
+		'proxy_directives' => array (
+			'datatype'	=> 'TEXT',
+			'formtype'	=> 'TEXT',
+			'default'	=> '',
+			'value'		=> '',
+			'width'		=> '30',
+			'maxlength'	=> '255'
+		),
+	##################################
+	# ENDE Datatable fields
+	##################################
+	)
+);
+
+}
 
 
 ?>

@@ -30,10 +30,11 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 require_once('../../lib/config.inc.php');
 require_once('../../lib/app.inc.php');
-require_once('tools.inc.php');
 
 //* Check permissions for module
 $app->auth->check_module_permissions('monitor');
+
+$app->uses('tools_monitor');
 
 // Loading the template
 $app->uses('tpl');
@@ -41,7 +42,7 @@ $app->tpl->newTemplate("form.tpl.htm");
 $app->tpl->setInclude('content_tpl','templates/show_log.htm');
 
 // Importing the GET values
-$refresh = (isset($_GET["refresh"]))?intval($_GET["refresh"]):0;
+$refresh = (isset($_GET["refresh"]))?$app->functions->intval($_GET["refresh"]):0;
 $logParam = $_GET["log"];
 
 /* Get some translations */
@@ -103,7 +104,7 @@ switch($logParam) {
 
 /*
  Creating the array with the refresh intervals
- Attention: the core-moule ist triggered every 5 minutes, 
+ Attention: the core-moule ist triggered every 5 minutes,
             so reload every 2 minutes is impossible!
 */
 $refresh_values = array('0' => '- '.$app->lng("No Refresh").' -','5' => '5 '.$app->lng("minutes"),'10' => '10 '.$app->lng("minutes"),'15' => '15 '.$app->lng("minutes"),'30' => '30 '.$app->lng("minutes"),'60' => '60 '.$app->lng("minutes"));
@@ -124,17 +125,30 @@ $record = $app->db->queryOneRecord("SELECT data, state FROM monitor_data WHERE t
 if(isset($record['data'])) {
 	$data = unserialize($record['data']);
 
-	$logData = nl2br($data);
+  $logData = explode("\n", htmlspecialchars($data));
+  $logDataHtml = '';
+  /* set css class for each line of log, depending on key words in each line */
+  foreach($logData as $val) {
+    if (strpos($val, 'ERROR') !== FALSE) {
+      $logDataHtml .= "<div class='logerror'>$val</div>";   
+    } elseif (strpos($val, 'WARN') !== FALSE) {
+      $logDataHtml .= "<div class='logwarn'>$val</div>";   
+    } elseif (strpos($val, 'INFO') !== FALSE) {
+      $logDataHtml .= "<div class='loginfo'>$val</div>";   
+    } else {
+      $logDataHtml .= "<div class='log'>$val</div>";   
+    }
+  }
 
 	$app->tpl->setVar("log_data", $logData);
 } else {
 	$app->tpl->setVar("log_data", $app->lng("no_logdata_txt"));
 }
 
-$app->tpl->setVar("title", $title);
+$app->tpl->setVar("list_head_txt", $title);
 $app->tpl->setVar("log_id",$logId);
-$app->tpl->setVar("description", $description);
-$app->tpl->setVar("time", getDataTime($logId));
+$app->tpl->setVar("list_desc_txt", $description);
+$app->tpl->setVar("time", $app->tools_monitor->getDataTime($logId));
 $app->tpl->setVar("monTransDate", $monTransDate);
 $app->tpl->setVar("monTransRefreshsq", $monTransRefreshsq);
 

@@ -25,7 +25,7 @@ $liste["table_idx"]			= "access_id";
 $liste["search_prefix"] 	= "search_";
 
 // Records per page
-$liste["records_per_page"] 	= 15;
+$liste["records_per_page"] 	= "15";
 
 // Script File of the list
 $liste["file"]				= "mail_whitelist_list.php";
@@ -88,7 +88,7 @@ $liste["item"][] = array(	'field'		=> "type",
 							'prefix'	=> "",
 							'suffix'	=> "",
 							'width'		=> "",
-							'value'		=> array('recipient' => 'Recipient', 'sender' => 'Sender', 'client' => 'Client'));
+							'value'		=> array('recipient' => 'recipient_txt', 'sender' => 'sender_txt', 'client' => 'client_txt'));
 
 
 ?>

@@ -34,9 +34,9 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	Tabellendefinition
 
 	Datentypen:
-	- INTEGER (Wandelt Ausdrücke in Int um)
+	- INTEGER (Wandelt AusdrÃ¼cke in Int um)
 	- DOUBLE
-	- CURRENCY (Formatiert Zahlen nach Währungsnotation)
+	- CURRENCY (Formatiert Zahlen nach WÃ¤hrungsnotation)
 	- VARCHAR (kein weiterer Format Check)
 	- TEXT (kein weiterer Format Check)
 	- DATE (Datumsformat, Timestamp Umwandlung)
@@ -54,7 +54,12 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	- Wert oder Array
 
 	Hinweis:
-	Das ID-Feld ist nicht bei den Table Values einzufügen.
+	Das ID-Feld ist nicht bei den Table Values einzufÃ¼gen.
+	
+	Search:
+	- searchable = 1 or searchable = 2 include the field in the search
+	- searchable = 1: this field will be the title of the search result
+	- searchable = 2: this field will be included in the description of the search result
 
 
 */
@@ -95,10 +100,28 @@ $form["tabs"]['server_ip'] = array (
 									 ),
 			'value'		=> ''
 		),
+		'client_id' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'SELECT',
+			'default'	=> '',
+			'datasource'	=> array ( 	'type'	=> 'SQL',
+										'querystring' => "SELECT client_id,CONCAT(IF(client.company_name != '', CONCAT(client.company_name, ' :: '), ''), client.contact_name, ' (', client.username, IF(client.customer_no != '', CONCAT(', ', client.customer_no), ''), ')') as name FROM client WHERE {AUTHSQL} ORDER BY contact_name",
+										'keyfield'=> 'client_id',
+										'valuefield'=> 'name'
+									 ),
+			'value'		=> array(0 => ' ')
+		),
+		'ip_type' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'SELECT',
+			'default'	=> '',
+			'value'		=> array('IPv4' => 'IPv4', 'IPv6' => 'IPv6'),
+			'searchable' => 2
+		),
 		'ip_address' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
-			'validators'	=> array ( 	0 => array (	'type'	=> 'ISIPV4',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'ISIP',
 														'errmsg'=> 'ip_error_wrong'),
 										1 => array (	'type'	=> 'UNIQUE',
 														'errmsg'=> 'ip_error_unique'),
@@ -109,13 +132,29 @@ $form["tabs"]['server_ip'] = array (
 			'width'		=> '15',
 			'maxlength'	=> '15',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 1
 		),
 		'virtualhost' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'CHECKBOX',
 			'default'	=> 'y',
 			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'virtualhost_port' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'TEXT',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'REGEX',
+														'regex' => '/^([0-9]{1,5}\,{0,1}){1,}$/i',
+														'errmsg'=> 'error_port_syntax'),
+									),
+			'default'	=> '80,443',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '15',
+			'maxlength'	=> '15',
+			'rows'		=> '',
+			'cols'		=> ''
 		),
 	##################################
 	# ENDE Datenbankfelder

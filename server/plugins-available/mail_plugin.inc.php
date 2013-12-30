@@ -80,8 +80,8 @@ class mail_plugin {
 		global $app, $conf;
 		
 		//* get the config
-		$app->uses("getconf,system");
-		$mail_config = $app->getconf->get_server_config($conf["server_id"], 'mail');
+		$app->uses('getconf,system');
+		$mail_config = $app->getconf->get_server_config($conf['server_id'], 'mail');
 
 		// convert to lower case - it could cause problems if some directory above has upper case name
 //		$data['new']['maildir'] = strtolower($data['new']['maildir']);
@@ -91,18 +91,18 @@ class mail_plugin {
 		$tmp_basepath_parts = explode('/',$tmp_basepath);
 		unset($tmp_basepath_parts[count($tmp_basepath_parts)-1]);
 		$base_path = implode('/',$tmp_basepath_parts);
-		
-		
 
 		//* Create the mail domain directory, if it does not exist
 		if(!empty($base_path) && !is_dir($base_path)) {
-			exec("su -c 'mkdir -p ".escapeshellcmd($base_path)."' ".$mail_config['mailuser_name']);
+			//exec("su -c 'mkdir -p ".escapeshellcmd($base_path)."' ".$mail_config['mailuser_name']);
+			$app->system->mkdirpath($base_path, 0700, $mail_config['mailuser_name'], $mail_config['mailuser_group']);
 			$app->log('Created Directory: '.$base_path,LOGLEVEL_DEBUG);
 		}
 		
 		// Dovecot uses a different mail layout with a separate 'Maildir' subdirectory.
 		if($mail_config['pop3_imap_daemon'] == 'dovecot') {
-			exec("su -c 'mkdir -p ".escapeshellcmd($maildomain_path)."' ".$mail_config['mailuser_name']);
+			//exec("su -c 'mkdir -p ".escapeshellcmd($maildomain_path)."' ".$mail_config['mailuser_name']);
+			$app->system->mkdirpath($maildomain_path, 0700, $mail_config['mailuser_name'], $mail_config['mailuser_group']);
 			$app->log('Created Directory: '.$maildomain_path,LOGLEVEL_DEBUG);
 			$maildomain_path .= '/Maildir';
 		}
@@ -110,7 +110,7 @@ class mail_plugin {
 		//* When the mail user dir exists but it is not a valid maildir, remove it
 		if(!empty($maildomain_path) && is_dir($maildomain_path) && !is_dir($maildomain_path.'/new') && !is_dir($maildomain_path.'/cur')) {
 			exec("su -c 'rm -rf ".escapeshellcmd($data['new']['maildir'])."' vmail");
-			$app->log("Removed invalid maildir and rebuild it: ".escapeshellcmd($data['new']['maildir']),LOGLEVEL_WARN);
+			$app->log('Removed invalid maildir and rebuild it: '.escapeshellcmd($data['new']['maildir']),LOGLEVEL_WARN);
 		}
 
 		//* Create the maildir, if it doesn not exist, set permissions, set quota.
@@ -120,11 +120,11 @@ class mail_plugin {
 			$app->system->maildirmake($maildomain_path,$mail_config['mailuser_name']);
 
 			exec('chown -R '.$mail_config['mailuser_name'].':'.$mail_config['mailuser_group'].' '.escapeshellcmd($data['new']['maildir']));
-			$app->log("Set ownership on ".escapeshellcmd($data['new']['maildir']),LOGLEVEL_DEBUG);
+			$app->log('Set ownership on '.escapeshellcmd($data['new']['maildir']),LOGLEVEL_DEBUG);
 
 			//* This is to fix the maildrop quota not being rebuilt after the quota is changed.
 			if($mail_config['pop3_imap_daemon'] != 'dovecot') {
-				exec("su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($maildomain_path)."' ".$mail_config['mailuser_name']); // Avoid maildirmake quota bug, see debian bug #214911
+				if(is_dir($maildomain_path)) exec("su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($maildomain_path)."' ".$mail_config['mailuser_name']); // Avoid maildirmake quota bug, see debian bug #214911
 				$app->log('Created Maildir: '."su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($maildomain_path)."' ".$mail_config['mailuser_name'],LOGLEVEL_DEBUG);
 			}
 		}
@@ -152,17 +152,58 @@ class mail_plugin {
 		
 		//* Set the maildir quota
 		if(is_dir($data['new']['maildir'].'/new') && $mail_config['pop3_imap_daemon'] != 'dovecot') {
-			exec("su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($data['new']['maildir'])."' ".$mail_config['mailuser_name']);
-			$app->log('Set Maildir quota: '."su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($data['new']['maildir'])."' ".$mail_config['mailuser_name'],LOGLEVEL_DEBUG);
+			if($data['new']['quota'] > 0) {
+				if(is_dir($data['new']['maildir'])) exec("su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($data['new']['maildir'])."' ".$mail_config['mailuser_name']);
+				$app->log('Set Maildir quota: '."su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($data['new']['maildir'])."' ".$mail_config['mailuser_name'],LOGLEVEL_DEBUG);
+			}
 		}
+		
+		//* Send the welcome email message
+		if(file_exists($conf['rootpath'].'/conf-custom/mail/welcome_email_'.$conf['language'].'.txt')) {
+			$lines = file($conf['rootpath'].'/conf-custom/mail/welcome_email_'.$conf['language'].'.txt');
+		} elseif(file_exists($conf['rootpath'].'/conf-custom/mail/welcome_email_en.txt')) {
+			$lines = file($conf['rootpath'].'/conf-custom/mail/welcome_email_en.txt');
+		} elseif(file_exists($conf['rootpath'].'/conf/mail/welcome_email_'.$conf['language'].'.txt')) {
+			$lines = file($conf['rootpath'].'/conf/mail/welcome_email_'.$conf['language'].'.txt');
+		} else {
+			$lines = file($conf['rootpath'].'/conf/mail/welcome_email_en.txt');
+		}
+		
+		//* Get from address
+		$parts = explode(':',trim($lines[0]));
+		unset($parts[0]);
+		$welcome_mail_from  = implode(':',$parts);
+		unset($lines[0]);
+		
+		//* Get subject
+		$parts = explode(':',trim($lines[1]));
+		unset($parts[0]);
+		$welcome_mail_subject  = implode(':',$parts);
+		unset($lines[1]);
+		
+		//* Get message
+		$welcome_mail_message = trim(implode($lines));
+		unset($tmp);
+		
+		$mailHeaders      = "MIME-Version: 1.0" . "\n";
+		$mailHeaders     .= "Content-type: text/plain; charset=utf-8" . "\n";
+		$mailHeaders     .= "Content-Transfer-Encoding: 8bit" . "\n";
+		$mailHeaders     .= "From: $welcome_mail_from" . "\n";
+		$mailHeaders     .= "Reply-To: $welcome_mail_from" . "\n";
+		$mailTarget       = $data["new"]["email"];
+		$mailSubject      = "=?utf-8?B?".base64_encode($welcome_mail_subject)."?=";
+
+		//* Send the welcome email only on the "master" mail server to avoid duplicate emails
+		if($conf['mirror_server_id'] == 0) mail($mailTarget, $mailSubject, $welcome_mail_message, $mailHeaders);
+		
 	}
 	
 	function user_update($event_name,$data) {
 		global $app, $conf;
 		
 		// get the config
-		$app->uses("getconf,system");
-		$mail_config = $app->getconf->get_server_config($conf["server_id"], 'mail');
+		$app->uses('getconf,system');
+		$mail_config = $app->getconf->get_server_config($conf['server_id'], 'mail');
 
 		// convert to lower case - it could cause problems if some directory above has upper case name
 		// $data['new']['maildir'] = strtolower($data['new']['maildir']);
@@ -170,8 +211,9 @@ class mail_plugin {
 		// Create the maildir, if it does not exist
 		/*
 		if(!is_dir($data['new']['maildir'])) {
-			exec('mkdir -p '.escapeshellcmd($data['new']['maildir']));
-			exec('chown '.$mail_config['mailuser_name'].':'.$mail_config['mailuser_group'].' '.escapeshellcmd($data['new']['maildir']));
+			mkdir(escapeshellcmd($data['new']['maildir']), 0, true);
+			chown(escapeshellcmd($data['new']['maildir']), $mail_config['mailuser_name']);
+			chgrp(escapeshellcmd($data['new']['maildir']), $mail_config['mailuser_group']);
 			$app->log('Created Maildir: '.$data['new']['maildir'],LOGLEVEL_DEBUG);
 		}
 		*/
@@ -184,13 +226,14 @@ class mail_plugin {
 
 		//* Create the mail domain directory, if it does not exist
 		if(!empty($base_path) && !is_dir($base_path)) {
-			exec("su -c 'mkdir -p ".escapeshellcmd($base_path)."' ".$mail_config['mailuser_name']);
+			//exec("su -c 'mkdir -p ".escapeshellcmd($base_path)."' ".$mail_config['mailuser_name']);
+			$app->system->mkdirpath($base_path, 0700, $mail_config['mailuser_name'], $mail_config['mailuser_group']);
 			$app->log('Created Directory: '.$base_path,LOGLEVEL_DEBUG);
 		}
 		
 		// Dovecot uses a different mail layout with a separate 'Maildir' subdirectory.
 		if($mail_config['pop3_imap_daemon'] == 'dovecot') {
-			exec("su -c 'mkdir -p ".escapeshellcmd($maildomain_path)."' ".$mail_config['mailuser_name']);
+			$app->system->mkdirpath($maildomain_path, 0700, $mail_config['mailuser_name'], $mail_config['mailuser_group']);
 			$app->log('Created Directory: '.$base_path,LOGLEVEL_DEBUG);
 			$maildomain_path .= '/Maildir';
 		}
@@ -198,7 +241,7 @@ class mail_plugin {
 		//* When the mail user dir exists but it is not a valid maildir, remove it
 		if(!empty($maildomain_path) && is_dir($maildomain_path) && !is_dir($maildomain_path.'/new') && !is_dir($maildomain_path.'/cur')) {
 			exec("su -c 'rm -rf ".escapeshellcmd($data['new']['maildir'])."' vmail");
-			$app->log("Removed invalid maildir and rebuild it: ".escapeshellcmd($data['new']['maildir']),LOGLEVEL_WARN);
+			$app->log('Removed invalid maildir and rebuild it: '.escapeshellcmd($data['new']['maildir']),LOGLEVEL_WARN);
 		}
 
 		//* Create the maildir, if it doesn not exist, set permissions, set quota.
@@ -208,11 +251,16 @@ class mail_plugin {
 			$app->system->maildirmake($maildomain_path,$mail_config['mailuser_name']);
 
 			exec('chown -R '.$mail_config['mailuser_name'].':'.$mail_config['mailuser_group'].' '.escapeshellcmd($data['new']['maildir']));
-			$app->log("Set ownership on ".escapeshellcmd($data['new']['maildir']),LOGLEVEL_DEBUG);
+			$app->log('Set ownership on '.escapeshellcmd($data['new']['maildir']),LOGLEVEL_DEBUG);
 			//* This is to fix the maildrop quota not being rebuilt after the quota is changed.
 			if($mail_config['pop3_imap_daemon'] != 'dovecot') {
-				exec("su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($maildomain_path)."' ".$mail_config['mailuser_name']); // Avoid maildirmake quota bug, see debian bug #214911
-				$app->log('Updated Maildir quota: '."su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($maildomain_path)."' ".$mail_config['mailuser_name'],LOGLEVEL_DEBUG);
+				if($data['new']['quota'] > 0) {
+					if(is_dir($maildomain_path)) exec("su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($maildomain_path)."' ".$mail_config['mailuser_name']); // Avoid maildirmake quota bug, see debian bug #214911
+					$app->log('Updated Maildir quota: '."su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($maildomain_path)."' ".$mail_config['mailuser_name'],LOGLEVEL_DEBUG);
+				} else {
+					if(file_exists($data['new']['maildir'].'/maildirsize')) unlink($data['new']['maildir'].'/maildirsize');
+					$app->log('Set Maildir quota to unlimited.',LOGLEVEL_DEBUG);
+				}
 			}
 		}
 		
@@ -252,16 +300,25 @@ class mail_plugin {
 		//This is to fix the maildrop quota not being rebuilt after the quota is changed.
 		// Courier Layout
 		if(is_dir($data['new']['maildir'].'/new') && $mail_config['pop3_imap_daemon'] != 'dovecot') {
-			exec("su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($data['new']['maildir'])."' ".$mail_config['mailuser_name']);
-			$app->log('Updated Maildir quota: '."su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($data['new']['maildir'])."' ".$mail_config['mailuser_name'],LOGLEVEL_DEBUG);
+			if($data['new']['quota'] > 0) {
+				if(is_dir($data['new']['maildir'])) exec("su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($data['new']['maildir'])."' ".$mail_config['mailuser_name']);
+				$app->log('Updated Maildir quota: '."su -c 'maildirmake -q ".$data['new']['quota']."S ".escapeshellcmd($data['new']['maildir'])."' ".$mail_config['mailuser_name'],LOGLEVEL_DEBUG);
+			} else {
+				if(file_exists($data['new']['maildir'].'/maildirsize')) unlink($data['new']['maildir'].'/maildirsize');
+				$app->log('Set Maildir quota to unlimited.',LOGLEVEL_DEBUG);
+			}
 		}
 	}
 	
 	function user_delete($event_name,$data) {
 		global $app, $conf;
 		
+		// get the config
+		$app->uses("getconf");
+		$mail_config = $app->getconf->get_server_config($conf['server_id'], 'mail');
+		
 		$old_maildir_path = escapeshellcmd($data['old']['maildir']);
-		if(!stristr($old_maildir_path,'..') && !stristr($old_maildir_path,'*') && strlen($old_maildir_path) >= 10) {
+		if($old_maildir_path != $mail_config['homedir_path'] && strlen($old_maildir_path) > strlen($mail_config['homedir_path']) && !stristr($old_maildir_path,'//') && !stristr($old_maildir_path,'..') && !stristr($old_maildir_path,'*') && strlen($old_maildir_path) >= 10) {
 			exec('rm -rf '.escapeshellcmd($old_maildir_path));
 			$app->log('Deleted the Maildir: '.$data['old']['maildir'],LOGLEVEL_DEBUG);
 		} else {
@@ -274,11 +331,11 @@ class mail_plugin {
 		
 		// get the config
 		$app->uses("getconf");
-		$mail_config = $app->getconf->get_server_config($conf["server_id"], 'mail');
+		$mail_config = $app->getconf->get_server_config($conf['server_id'], 'mail');
 		
 		//* Delete maildomain path
 		$old_maildomain_path = escapeshellcmd($mail_config['homedir_path'].'/'.$data['old']['domain']);
-		if(!stristr($old_maildomain_path,'//') && !stristr($old_maildomain_path,'..') && !stristr($old_maildomain_path,'*') && !stristr($old_maildomain_path,'&') && strlen($old_maildomain_path) >= 10) {
+		if($old_maildomain_path != $mail_config['homedir_path'] && !stristr($old_maildomain_path,'//') && !stristr($old_maildomain_path,'..') && !stristr($old_maildomain_path,'*') && !stristr($old_maildomain_path,'&') && strlen($old_maildomain_path) >= 10  && !empty($data['old']['domain'])) {
 			exec('rm -rf '.escapeshellcmd($old_maildomain_path));
 			$app->log('Deleted the mail domain directory: '.$old_maildomain_path,LOGLEVEL_DEBUG);
 		} else {
@@ -287,7 +344,7 @@ class mail_plugin {
 		
 		//* Delete mailfilter path
 		$old_maildomain_path = escapeshellcmd($mail_config['homedir_path'].'/mailfilters/'.$data['old']['domain']);
-		if(!stristr($old_maildomain_path,'//') && !stristr($old_maildomain_path,'..') && !stristr($old_maildomain_path,'*') && !stristr($old_maildomain_path,'&') && strlen($old_maildomain_path) >= 10) {
+		if($old_maildomain_path != $mail_config['homedir_path'].'/mailfilters/' && !stristr($old_maildomain_path,'//') && !stristr($old_maildomain_path,'..') && !stristr($old_maildomain_path,'*') && !stristr($old_maildomain_path,'&') && strlen($old_maildomain_path) >= 10 && !empty($data['old']['domain'])) {
 			exec('rm -rf '.escapeshellcmd($old_maildomain_path));
 			$app->log('Deleted the mail domain mailfilter directory: '.$old_maildomain_path,LOGLEVEL_DEBUG);
 		} else {
@@ -298,7 +355,7 @@ class mail_plugin {
 	function transport_update($event_name,$data) {
 		global $app, $conf;
 		
-		exec('/etc/init.d/postfix reload &> /dev/null');
+		exec($conf['init_scripts'] . '/' . 'postfix reload &> /dev/null');
 		$app->log('Postfix config reloaded ',LOGLEVEL_DEBUG);
 		
 	}

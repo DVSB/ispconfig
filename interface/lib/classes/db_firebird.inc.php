@@ -45,7 +45,7 @@ class db {
 	var $transID;
 
 	// constructor
-	function db()
+	function __construct()
 	{
 		
 		global $conf;
@@ -55,6 +55,9 @@ class db {
 		$this->dbPass = $conf["db_password"];
 		$this->connect();
 	}
+	function __destruct() {
+		$this->closeConn();
+        }
 
 	// error handler
 	function updateError($location)
@@ -319,12 +322,12 @@ class db {
   		return $this->query($sql);
    }
    
-   // gibt Array mit Tabellennamen zurück
+   // gibt Array mit Tabellennamen zurÃ¼ck
    function getTables($database_name) {
         return false;       
    }
    
-   // gibt Feldinformationen zur Tabelle zurück
+   // gibt Feldinformationen zur Tabelle zurÃ¼ck
    /*
    $columns = array(action =>   add | alter | drop
                     name =>     Spaltenname
@@ -363,7 +366,7 @@ class db {
         return 'char';
    break;
    case 'varchar':
-        if($typeValue < 1) $go_api->errorMessage("Datenbank Fehler: Für diesen Datentyp ist eine Längenangabe notwendig.");
+        if($typeValue < 1) $go_api->errorMessage("Datenbank Fehler: FÃ¼r diesen Datentyp ist eine LÃ¤ngenangabe notwendig.");
         return 'varchar('.$typeValue.')';
    break;
    case 'text':

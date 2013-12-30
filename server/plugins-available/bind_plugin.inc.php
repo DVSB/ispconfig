@@ -39,7 +39,7 @@ class bind_plugin {
 	function onInstall() {
 		global $conf;
 		
-		if(isset($conf['bind']['installed']) && $conf['bind']['installed'] == true) {
+		if(isset($conf['bind']['installed']) && $conf['bind']['installed'] == true && @is_link('/usr/local/ispconfig/server/mods-enabled/dns_module.inc.php')) {
 			return true;
 		} else {
 			return false;
@@ -63,6 +63,11 @@ class bind_plugin {
 		$app->plugins->registerEvent('dns_soa_insert',$this->plugin_name,'soa_insert');
 		$app->plugins->registerEvent('dns_soa_update',$this->plugin_name,'soa_update');
 		$app->plugins->registerEvent('dns_soa_delete',$this->plugin_name,'soa_delete');
+
+    //* SLAVE
+		$app->plugins->registerEvent('dns_slave_insert',$this->plugin_name,'slave_insert');
+		$app->plugins->registerEvent('dns_slave_update',$this->plugin_name,'slave_update');
+		$app->plugins->registerEvent('dns_slave_delete',$this->plugin_name,'slave_delete');
 		
 		//* RR
 		$app->plugins->registerEvent('dns_rr_insert',$this->plugin_name,'rr_insert');
@@ -98,14 +103,37 @@ class bind_plugin {
 			$tpl->setVar($zone);
 		
 			$records = $app->db->queryAllRecords("SELECT * FROM dns_rr WHERE zone = ".$zone['id']." AND active = 'Y'");
+			if(is_array($records) && !empty($records)){
+				for($i=0;$i<sizeof($records);$i++){
+					if($records[$i]['ttl'] == 0) $records[$i]['ttl'] = '';
+				}
+			}
 			$tpl->setLoop('zones',$records);
-		
-			$filename = escapeshellcmd($dns_config['bind_zonefiles_dir'].'/pri.'.substr($zone['origin'],0,-1));
-			$app->log("Writing BIND domain file: ".$filename,LOGLEVEL_DEBUG);
+			
+			//TODO : change this when distribution information has been integrated into server record
+        	if (file_exists('/etc/gentoo-release')) {
+				$filename = escapeshellcmd($dns_config['bind_zonefiles_dir'].'/pri.'.str_replace("/", "_", substr($zone['origin'],0,-1)));
+        	}
+        	else {
+        		$filename = escapeshellcmd($dns_config['bind_zonefiles_dir'].'/pri.'.str_replace("/", "_", substr($zone['origin'],0,-1)));
+        	}
+        	
 			file_put_contents($filename,$tpl->grab());
-			exec('chown '.escapeshellcmd($dns_config['bind_user']).':'.escapeshellcmd($dns_config['bind_group']).' '.$filename);
+			chown($filename, escapeshellcmd($dns_config['bind_user']));
+			chgrp($filename, escapeshellcmd($dns_config['bind_group']));
+			
+			//* Check the zonefile
+			if(is_file($filename.'.err')) unlink($filename.'.err');
+			exec('named-checkzone '.escapeshellarg($zone['origin']).' '.escapeshellarg($filename),$out,$return_status);
+			if($return_status === 0) {
+				$app->log("Writing BIND domain file: ".$filename,LOGLEVEL_DEBUG);
+			} else {
+				$app->log("Writing BIND domain file failed: ".$filename." ".implode(' ',$out),LOGLEVEL_WARN);
+				rename($filename,$filename.'.err');
+			}
 			unset($tpl);
 			unset($records);
+			unset($records_out);
 			unset($zone);
 		}
 		
@@ -116,8 +144,16 @@ class bind_plugin {
 		
 		//* Delete old domain file, if domain name has been changed
 		if($data['old']['origin'] != $data['new']['origin']) {
-			$filename = $dns_config['bind_zonefiles_dir'].'/pri.'.substr($data['old']['origin'],0,-1);
-			if(is_file($filename)) unset($filename);
+			//TODO : change this when distribution information has been integrated into server record
+        	if (file_exists('/etc/gentoo-release')) {
+        		$filename = $dns_config['bind_zonefiles_dir'].'/pri.'.str_replace("/", "_", substr($data['old']['origin'],0,-1));
+        	}
+        	else {
+        		$filename = $dns_config['bind_zonefiles_dir'].'/pri.'.str_replace("/", "_", substr($data['old']['origin'],0,-1));
+        	}
+			
+			if(is_file($filename)) unlink($filename);
+			if(is_file($filename.'.err')) unlink($filename.'.err');
 		}
 		
 		//* Reload bind nameserver
@@ -129,20 +165,107 @@ class bind_plugin {
 		global $app, $conf;
 		
 		//* load the server configuration options
-		$app->uses("getconf");
+		$app->uses("getconf,tpl");
 		$dns_config = $app->getconf->get_server_config($conf["server_id"], 'dns');
 		
 		//* rebuild the named.conf file
 		$this->write_named_conf($data,$dns_config);
 		
 		//* Delete the domain file
-		$filename = $dns_config['bind_zonefiles_dir'].'/pri.'.substr($data['old']['origin'],0,-1);
-		if(is_file($filename)) unset($filename);
-		$app->log("Deleting BIND domain file: ".$filename,LOGLEVEL_DEBUG);
+		//TODO : change this when distribution information has been integrated into server record
+        if (file_exists('/etc/gentoo-release')) {
+        	$zone_file_name = $dns_config['bind_zonefiles_dir'].'/pri/'.str_replace("/", "_",substr($data['old']['origin'],0,-1));
+        }
+        else {
+        	$zone_file_name = $dns_config['bind_zonefiles_dir'].'/pri.'.str_replace("/", "_",substr($data['old']['origin'],0,-1));
+        }
+		
+		if(is_file($zone_file_name)) unlink($zone_file_name);
+		if(is_file($zone_file_name.'.err')) unlink($zone_file_name.'.err');
+		$app->log("Deleting BIND domain file: ".$zone_file_name,LOGLEVEL_DEBUG);
 		
 		//* Reload bind nameserver
 		$app->services->restartServiceDelayed('bind','reload');
 			
+	}
+
+	function slave_insert($event_name,$data) {
+		global $app, $conf;
+		
+		$this->action = 'insert';
+		$this->slave_update($event_name,$data);
+		
+	}
+	
+	function slave_update($event_name,$data) {
+		global $app, $conf;
+		
+		//* Load libraries
+		$app->uses("getconf,tpl");
+		
+		//* load the server configuration options
+		$dns_config = $app->getconf->get_server_config($conf["server_id"], 'dns');
+		
+		//* rebuild the named.conf file if the origin has changed or when the origin is inserted.
+		//if($this->action == 'insert' || $data['old']['origin'] != $data['new']['origin']) {
+		$this->write_named_conf($data,$dns_config);
+		//}
+		
+		//* Delete old domain file, if domain name has been changed
+		if($data['old']['origin'] != $data['new']['origin']) {
+			//TODO : change this when distribution information has been integrated into server record
+	        if (file_exists('/etc/gentoo-release')) {
+	        	$filename = $dns_config['bind_zonefiles_dir'].'/sec/'.str_replace("/", "_",substr($data['old']['origin'],0,-1));
+	        }
+	        else {
+	        	$filename = $dns_config['bind_zonefiles_dir'].'/slave/sec.'.str_replace("/", "_",substr($data['old']['origin'],0,-1));
+	        }
+			
+			if(is_file($filename)) unset($filename);
+		}
+		
+		//* Ensure that the named slave directory is writable by the named user
+		if (file_exists('/etc/gentoo-release')) {
+			$slave_record_dir = $dns_config['bind_zonefiles_dir'].'/sec';
+		} else {
+			$slave_record_dir = $dns_config['bind_zonefiles_dir'].'/slave';
+		}
+		if(!@is_dir($slave_record_dir)) mkdir($slave_record_dir,0770);
+		chown($slave_record_dir,$dns_config['bind_user']);
+		chgrp($slave_record_dir,$dns_config['bind_group']);
+		
+		//* Reload bind nameserver
+		$app->services->restartServiceDelayed('bind','reload');
+     		
+	}
+	
+	function slave_delete($event_name,$data) {
+		global $app, $conf;
+		
+		
+		//* load the server configuration options
+		$app->uses("getconf,tpl");
+		$dns_config = $app->getconf->get_server_config($conf["server_id"], 'dns');
+		
+		//* rebuild the named.conf file
+		$this->write_named_conf($data,$dns_config);
+		
+		//* Delete the domain file
+		//TODO : change this when distribution information has been integrated into server record
+	    if (file_exists('/etc/gentoo-release')) {
+	    	$zone_file_name = $dns_config['bind_zonefiles_dir'].'/sec/'.str_replace("/", "_",substr($data['old']['origin'],0,-1));
+	    }
+	    else {
+	    	$zone_file_name = $dns_config['bind_zonefiles_dir'].'/slave/sec.'.str_replace("/", "_",substr($data['old']['origin'],0,-1));
+	    }
+		
+		if(is_file($zone_file_name)) unlink($zone_file_name);
+		$app->log("Deleting BIND domain file for secondary zone: ".$zone_file_name,LOGLEVEL_DEBUG);
+		
+		//* Reload bind nameserver
+		$app->services->restartServiceDelayed('bind','reload');
+			
+		
 	}
 	
 	function rr_insert($event_name,$data) {
@@ -173,7 +296,7 @@ class bind_plugin {
 		global $app, $conf;
 		
 		//* Get the data of the soa and call soa_update
-		$tmp = $app->db->queryOneRecord("SELECT * FROM dns_soa WHERE id = ".$data['old']['zone']);
+		$tmp = $app->db->queryOneRecord("SELECT * FROM dns_soa WHERE id = ".intval($data['old']['zone']));
 		$data["new"] = $tmp;
 		$data["old"] = $tmp;
 		$this->action = 'update';
@@ -185,22 +308,93 @@ class bind_plugin {
 	
 	function write_named_conf($data, $dns_config) {
 		global $app, $conf;
-		
-		$tmps = $app->db->queryAllRecords("SELECT origin FROM dns_soa WHERE active = 'Y'");
+	
+		//* Only write the master file for the current server	
+		$tmps = $app->db->queryAllRecords("SELECT origin, xfer, also_notify, update_acl FROM dns_soa WHERE active = 'Y' AND server_id=".$conf["server_id"]);
 		$zones = array();
-		foreach($tmps as $tmp) {
-			$zones[] = array(	'zone' => substr($tmp['origin'],0,-1),
-								'zonefile_path' => $dns_config['bind_zonefiles_dir'].'/pri.'.substr($tmp['origin'],0,-1)
-							);
-		}
 		
+		//* Check if the current zone that triggered this function has at least one NS record
+		/* Has been replaced by a better zone check
+		$rec_num = $app->db->queryOneRecord("SELECT count(id) as ns FROM dns_rr WHERE type = 'NS' AND zone = ".intval($data['new']['id'])." AND active = 'Y'");
+		if($rec_num['ns'] == 0) {
+			$exclude_zone = $data['new']['origin'];
+		} else {
+			$exclude_zone = '';
+		}
+		*/
+		
+		//TODO : change this when distribution information has been integrated into server record
+	    if (file_exists('/etc/gentoo-release')) {
+	    	$pri_zonefiles_path = $dns_config['bind_zonefiles_dir'].'/pri/';
+	    	$sec_zonefiles_path = $dns_config['bind_zonefiles_dir'].'/sec/';
+	    	
+	    }
+	    else {
+	    	$pri_zonefiles_path = $dns_config['bind_zonefiles_dir'].'/pri.';
+	    	$sec_zonefiles_path = $dns_config['bind_zonefiles_dir'].'/slave/sec.';
+	    }
+
+		//* Loop trough zones
+		foreach($tmps as $tmp) {
+			
+			$zone_file = $pri_zonefiles_path.str_replace("/", "_",substr($tmp['origin'],0,-1));
+			
+			$options = '';
+			if(trim($tmp['xfer']) != '') {
+				$options .= "        allow-transfer {".str_replace(',',';',$tmp['xfer']).";};\n";
+			} else {
+				$options .= "        allow-transfer {none;};\n";
+			}
+			if(trim($tmp['also_notify']) != '') $options .= '        also-notify {'.str_replace(',',';',$tmp['also_notify']).";};\n";
+			if(trim($tmp['update_acl']) != '') $options .= "        allow-update {".str_replace(',',';',$tmp['update_acl']).";};\n";
+			
+			if(file_exists($zone_file)) {
+				$zones[] = array(	'zone' => substr($tmp['origin'],0,-1),
+									'zonefile_path' => $zone_file,
+									'options' => $options
+								);
+			}
+		}
+
 		$tpl = new tpl();
 		$tpl->newTemplate("bind_named.conf.local.master");
 		$tpl->setLoop('zones',$zones);
 		
-		file_put_contents($dns_config['named_conf_local_path'],$tpl->grab());
-		$app->log("Writing BIND named.conf.local file: ".$dns_config['named_conf_local_path'],LOGLEVEL_DEBUG);
+		//* And loop through the secondary zones, but only for the current server
+		$tmps_sec = $app->db->queryAllRecords("SELECT origin, xfer, ns FROM dns_slave WHERE active = 'Y' AND server_id=".$conf["server_id"]);
+		$zones_sec = array();
+
+		foreach($tmps_sec as $tmp) {
+			
+			$options = "        masters {".$tmp['ns'].";};\n";
+            if(trim($tmp['xfer']) != '') {
+                $options .= "        allow-transfer {".str_replace(',',';',$tmp['xfer']).";};\n";
+            } else {
+                $options .= "        allow-transfer {none;};\n";
+            }
+
+			
+			$zones_sec[] = array(	'zone' => substr($tmp['origin'],0,-1),
+									'zonefile_path' => $sec_zonefiles_path.str_replace("/", "_",substr($tmp['origin'],0,-1)),
+									'options' => $options
+								);
+
+//			$filename = escapeshellcmd($dns_config['bind_zonefiles_dir'].'/slave/sec.'.substr($tmp['origin'],0,-1));
+//			$app->log("Writing BIND domain file: ".$filename,LOGLEVEL_DEBUG);
+
+					
+		}
 		
+		$tpl_sec = new tpl();
+		$tpl_sec->newTemplate("bind_named.conf.local.slave");
+		$tpl_sec->setLoop('zones',$zones_sec); 
+    		
+		file_put_contents($dns_config['named_conf_local_path'],$tpl->grab()."\n".$tpl_sec->grab()); 
+		$app->log("Writing BIND named.conf.local file: ".$dns_config['named_conf_local_path'],LOGLEVEL_DEBUG);
+
+ 		unset($tpl_sec); 
+		unset($zones_sec); 
+		unset($tmps_sec);  
 		unset($tpl);
 		unset($zones);
 		unset($tmps);

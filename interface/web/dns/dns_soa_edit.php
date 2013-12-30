@@ -50,6 +50,16 @@ $app->load('tform_actions');
 
 class page_action extends tform_actions {
 	
+	function onShow() {
+		global $app;
+		//* Reset the page number of the list form for the dns
+		//* records to 0 if we are on the first tab of the soa form.
+		if($app->tform->getNextTab() == 'dns_soa') {
+			$_SESSION['search']['dns_a']['page'] = 0;
+		}
+		parent::onShow();
+	}
+	
 	function onShowNew() {
 		global $app, $conf;
 		
@@ -72,15 +82,15 @@ class page_action extends tform_actions {
 		// If user is admin, we will allow him to select to whom this record belongs
 		if($_SESSION["s"]["user"]["typ"] == 'admin') {
 			// Getting Domains of the user
-			$sql = "SELECT groupid, name FROM sys_group WHERE client_id > 0 ORDER by name";
+			$sql = "SELECT sys_group.groupid, sys_group.name, CONCAT(IF(client.company_name != '', CONCAT(client.company_name, ' :: '), ''), client.contact_name, ' (', client.username, IF(client.customer_no != '', CONCAT(', ', client.customer_no), ''), ')') as contactname FROM sys_group, client WHERE sys_group.client_id = client.client_id AND sys_group.client_id > 0 ORDER BY sys_group.name";
 			$clients = $app->db->queryAllRecords($sql);
 			$client_select = '';
 			if($_SESSION["s"]["user"]["typ"] == 'admin') $client_select .= "<option value='0'></option>";
-			$tmp_data_record = $app->tform->getDataRecord($this->id);
+			//$tmp_data_record = $app->tform->getDataRecord($this->id);
 			if(is_array($clients)) {
 				foreach( $clients as $client) {
-					$selected = ($client["groupid"] == @$tmp_data_record["sys_groupid"])?'SELECTED':'';
-					$client_select .= "<option value='$client[groupid]' $selected>$client[name]</option>\r\n";
+					$selected = @(is_array($this->dataRecord) && ($client["groupid"] == $this->dataRecord['client_group_id'] || $client["groupid"] == $this->dataRecord['sys_groupid']))?'SELECTED':'';
+					$client_select .= "<option value='$client[groupid]' $selected>$client[contactname]</option>\r\n";
 				}
 			}
 		$app->tpl->setVar("client_group_id",$client_select);
@@ -88,22 +98,30 @@ class page_action extends tform_actions {
 		
 			// Get the limits of the client
 			$client_group_id = $_SESSION["s"]["user"]["default_group"];
-			$client = $app->db->queryOneRecord("SELECT client.client_id, client.contact_name FROM sys_group, client WHERE sys_group.client_id = client.client_id and sys_group.groupid = $client_group_id");
+			$client = $app->db->queryOneRecord("SELECT client.client_id, client.contact_name, CONCAT(IF(client.company_name != '', CONCAT(client.company_name, ' :: '), ''), client.contact_name, ' (', client.username, IF(client.customer_no != '', CONCAT(', ', client.customer_no), ''), ')') as contactname, sys_group.name FROM sys_group, client WHERE sys_group.client_id = client.client_id and sys_group.groupid = $client_group_id");
 			
 			// Fill the client select field
-			$sql = "SELECT groupid, name FROM sys_group, client WHERE sys_group.client_id = client.client_id AND client.parent_client_id = ".$client['client_id']." ORDER BY name";
+			$sql = "SELECT sys_group.groupid, sys_group.name, CONCAT(IF(client.company_name != '', CONCAT(client.company_name, ' :: '), ''), client.contact_name, ' (', client.username, IF(client.customer_no != '', CONCAT(', ', client.customer_no), ''), ')') as contactname FROM sys_group, client WHERE sys_group.client_id = client.client_id AND client.parent_client_id = ".$client['client_id']." ORDER BY sys_group.name";
 			$clients = $app->db->queryAllRecords($sql);
 			$tmp = $app->db->queryOneRecord("SELECT groupid FROM sys_group WHERE client_id = ".$client['client_id']);
-			$client_select = '<option value="'.$tmp['groupid'].'">'.$client['contact_name'].'</option>';
-			$tmp_data_record = $app->tform->getDataRecord($this->id);
+			$client_select = '<option value="'.$tmp['groupid'].'">'.$client['contactname'].'</option>';
+			//$tmp_data_record = $app->tform->getDataRecord($this->id);
 			if(is_array($clients)) {
 				foreach( $clients as $client) {
-					$selected = @($client["groupid"] == $tmp_data_record["sys_groupid"])?'SELECTED':'';
-					$client_select .= "<option value='$client[groupid]' $selected>$client[name]</option>\r\n";
+					$selected = @(is_array($this->dataRecord) && ($client["groupid"] == $this->dataRecord['client_group_id'] || $client["groupid"] == $this->dataRecord['sys_groupid']))?'SELECTED':'';
+					$client_select .= "<option value='$client[groupid]' $selected>$client[contactname]</option>\r\n";
 				}
 			}
 			$app->tpl->setVar("client_group_id",$client_select);
 		
+		}
+		
+		if($this->id > 0) {
+			//* we are editing a existing record
+			$app->tpl->setVar("edit_disabled", 1);
+			$app->tpl->setVar("server_id_value", $this->dataRecord["server_id"]);
+		} else {
+			$app->tpl->setVar("edit_disabled", 0);
 		}
 		
 		parent::onShowEnd();
@@ -120,7 +138,7 @@ class page_action extends tform_actions {
 			// When the record is updated
 			if($this->id > 0) {
 				// restore the server ID if the user is not admin and record is edited
-				$tmp = $app->db->queryOneRecord("SELECT server_id FROM dns_soa WHERE id = ".intval($this->id));
+				$tmp = $app->db->queryOneRecord("SELECT server_id FROM dns_soa WHERE id = ".$app->functions->intval($this->id));
 				$this->dataRecord["server_id"] = $tmp["server_id"];
 				unset($tmp);
 			// When the record is inserted
@@ -155,6 +173,14 @@ class page_action extends tform_actions {
 			$this->dataRecord["mbox"] = str_replace('@','.',$this->dataRecord["mbox"]);
 		}
 		
+		$this->dataRecord["xfer"] = preg_replace('/\s+/', '', $this->dataRecord["xfer"]);
+		$this->dataRecord["also_notify"] = preg_replace('/\s+/', '', $this->dataRecord["also_notify"]);
+
+		//* Check if a secondary zone with the same name already exists 	
+		$tmp = $app->db->queryOneRecord("SELECT count(id) as number FROM dns_slave WHERE origin = \"".$this->dataRecord["origin"]."\" AND server_id = \"".$this->dataRecord["server_id"]."\"");
+		if($tmp["number"] > 0) {
+  			$app->error($app->tform->wordbook["origin_error_unique"]);
+		}		
 
 		parent::onSubmit();
 	}
@@ -164,18 +190,35 @@ class page_action extends tform_actions {
 		
 		// make sure that the record belongs to the client group and not the admin group when a dmin inserts it
 		if($_SESSION["s"]["user"]["typ"] == 'admin' && isset($this->dataRecord["client_group_id"])) {
-			$client_group_id = intval($this->dataRecord["client_group_id"]);
-			$app->db->query("UPDATE dns_soa SET sys_groupid = $client_group_id WHERE id = ".$this->id);
+			$client_group_id = $app->functions->intval($this->dataRecord["client_group_id"]);
+			$app->db->query("UPDATE dns_soa SET sys_groupid = $client_group_id, sys_perm_group = 'ru' WHERE id = ".$this->id);
 			// And we want to update all rr records too, that belong to this record
 			$app->db->query("UPDATE dns_rr SET sys_groupid = $client_group_id WHERE zone = ".$this->id);
 		}
 		if($app->auth->has_clients($_SESSION['s']['user']['userid']) && isset($this->dataRecord["client_group_id"])) {
-			$client_group_id = intval($this->dataRecord["client_group_id"]);
-			$app->db->query("UPDATE dns_soa SET sys_groupid = $client_group_id WHERE id = ".$this->id);
+			$client_group_id = $app->functions->intval($this->dataRecord["client_group_id"]);
+			$app->db->query("UPDATE dns_soa SET sys_groupid = $client_group_id, sys_perm_group = 'riud' WHERE id = ".$this->id);
 			// And we want to update all rr records too, that belong to this record
 			$app->db->query("UPDATE dns_rr SET sys_groupid = $client_group_id WHERE zone = ".$this->id);
 		}
 
+	}
+	
+	function onBeforeUpdate () {
+		global $app, $conf;
+
+		//* Check if the server has been changed
+		// We do this only for the admin or reseller users, as normal clients can not change the server ID anyway
+		if($_SESSION["s"]["user"]["typ"] != 'admin' && !$app->auth->has_clients($_SESSION['s']['user']['userid'])) {
+			//* We do not allow users to change a domain which has been created by the admin
+			$rec = $app->db->queryOneRecord("SELECT origin from dns_soa WHERE id = ".$this->id);
+			if(isset($this->dataRecord["origin"]) && $rec['origin'] != $this->dataRecord["origin"] && $app->tform->checkPerm($this->id,'u')) {
+				//* Add a error message and switch back to old server
+				$app->tform->errorMessage .= $app->lng('The Zone (soa) can not be changed. Please ask your Administrator if you want to change the Zone name.');
+				$this->dataRecord["origin"] = $rec['origin'];
+			}
+			unset($rec);
+		}
 	}
 	
 	function onAfterUpdate() {
@@ -190,21 +233,21 @@ class page_action extends tform_actions {
 		
 		// make sure that the record belongs to the client group and not the admin group when a dmin inserts it
 		if($_SESSION["s"]["user"]["typ"] == 'admin' && isset($this->dataRecord["client_group_id"])) {
-			$client_group_id = intval($this->dataRecord["client_group_id"]);
-			$app->db->query("UPDATE dns_soa SET sys_groupid = $client_group_id WHERE id = ".$this->id);
+			$client_group_id = $app->functions->intval($this->dataRecord["client_group_id"]);
+			$app->db->query("UPDATE dns_soa SET sys_groupid = $client_group_id, sys_perm_group = 'ru' WHERE id = ".$this->id);
 			// And we want to update all rr records too, that belong to this record
 			$app->db->query("UPDATE dns_rr SET sys_groupid = $client_group_id WHERE zone = ".$this->id);
 		}
 		if($app->auth->has_clients($_SESSION['s']['user']['userid']) && isset($this->dataRecord["client_group_id"])) {
-			$client_group_id = intval($this->dataRecord["client_group_id"]);
-			$app->db->query("UPDATE dns_soa SET sys_groupid = $client_group_id WHERE id = ".$this->id);
+			$client_group_id = $app->functions->intval($this->dataRecord["client_group_id"]);
+			$app->db->query("UPDATE dns_soa SET sys_groupid = $client_group_id, sys_perm_group = 'riud' WHERE id = ".$this->id);
 			// And we want to update all rr records too, that belong to this record
 			$app->db->query("UPDATE dns_rr SET sys_groupid = $client_group_id WHERE zone = ".$this->id);
 		}
 		
 		//** When the client group has changed, change also the owner of the record if the owner is not the admin user
 		if($this->oldDataRecord["client_group_id"] != $this->dataRecord["client_group_id"] && $this->dataRecord["sys_userid"] != 1) {
-			$client_group_id = intval($this->dataRecord["client_group_id"]);
+			$client_group_id = $app->functions->intval($this->dataRecord["client_group_id"]);
 			$tmp = $app->db->queryOneREcord("SELECT userid FROM sys_user WHERE default_group = ".$client_group_id);
 			if($tmp["userid"] > 0) {
 				$app->db->query("UPDATE dns_soa SET sys_userid = ".$tmp["userid"]." WHERE id = ".$this->id);

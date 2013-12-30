@@ -81,7 +81,7 @@ class cron_jailkit_plugin {
             $app->log("Parent domain not found",LOGLEVEL_WARN);
             return 0;
         } elseif($parent_domain["system_user"] == 'root' or $parent_domain["system_group"] == 'root') {
-            $app->log("Websites (and Crons) can not be owned by the root user or group.",LOGLEVEL_WARN);
+            $app->log("Websites (and Crons) cannot be owned by the root user or group.",LOGLEVEL_WARN);
             return 0;
         }
 		
@@ -117,15 +117,19 @@ class cron_jailkit_plugin {
 				$this->jailkit_config = $app->getconf->get_server_config($conf["server_id"], 'jailkit');
 				
 				$this->_update_website_security_level();
+				
+				$app->system->web_folder_protection($parent_domain['document_root'],false);
 			
 				$this->_setup_jailkit_chroot();
 				
 				$this->_add_jailkit_user();
 				
-				$command .= 'usermod -U '.escapeshellcmd($parent_domain["system_user"]);
+				$command .= 'usermod -U '.escapeshellcmd($parent_domain["system_user"]).' 2>/dev/null';
 				exec($command);
 				
 				$this->_update_website_security_level();
+				
+				$app->system->web_folder_protection($parent_domain['document_root'],true);
 			}
 		
 			$app->log("Jailkit Plugin (Cron) -> insert username:".$parent_domain['system_user'],LOGLEVEL_DEBUG);
@@ -150,7 +154,7 @@ class cron_jailkit_plugin {
             $app->log("Parent domain not found",LOGLEVEL_WARN);
             return 0;
         } elseif($parent_domain["system_user"] == 'root' or $parent_domain["system_group"] == 'root') {
-            $app->log("Websites (and Crons) can not be owned by the root user or group.",LOGLEVEL_WARN);
+            $app->log("Websites (and Crons) cannot be owned by the root user or group.",LOGLEVEL_WARN);
             return 0;
         }
 		
@@ -181,13 +185,16 @@ class cron_jailkit_plugin {
 				$this->data = $data;
 				$this->app = $app;
 				$this->jailkit_config = $app->getconf->get_server_config($conf["server_id"], 'jailkit');
-				
+
 				$this->_update_website_security_level();
+				
+				$app->system->web_folder_protection($parent_domain['document_root'],false);
 			
 				$this->_setup_jailkit_chroot();
 				$this->_add_jailkit_user();
 				
 				$this->_update_website_security_level();
+				$app->system->web_folder_protection($parent_domain['document_root'],true);
 			}
 		
 			$app->log("Jailkit Plugin (Cron) -> update username:".$parent_domain['system_user'],LOGLEVEL_DEBUG);
@@ -208,13 +215,15 @@ class cron_jailkit_plugin {
 	
 	function _setup_jailkit_chroot()
 	{
+		global $app;	
+			
 			//check if the chroot environment is created yet if not create it with a list of program sections from the config
 			if (!is_dir($this->parent_domain['document_root'].'/etc/jailkit'))
 			{
 				$command = '/usr/local/ispconfig/server/scripts/create_jailkit_chroot.sh';
 				$command .= ' '.escapeshellcmd($this->parent_domain['document_root']);
 				$command .= ' \''.$this->jailkit_config['jailkit_chroot_app_sections'].'\'';
-				exec($command);
+				exec($command.' 2>/dev/null');
 				
 				$this->app->log("Added jailkit chroot with command: ".$command,LOGLEVEL_DEBUG);
 				
@@ -230,22 +239,22 @@ class cron_jailkit_plugin {
                 $tpl->setVar('home_dir',$this->_get_home_dir(""));
 				
 				$bashrc = escapeshellcmd($this->parent_domain['document_root']).'/etc/bash.bashrc';
-				if(@is_file($bashrc)) exec('rm '.$bashrc);
+				if(@is_file($bashrc) || @is_link($bashrc)) unlink($bashrc);
 				
-				file_put_contents($bashrc,$tpl->grab());
+				$app->system->file_put_contents($bashrc,$tpl->grab());
 				unset($tpl);
 				
-				$this->app->log("Added bashrc scrpt : ".$bashrc,LOGLEVEL_DEBUG);
+				$this->app->log('Added bashrc script: '.$bashrc,LOGLEVEL_DEBUG);
 				
 				$tpl = new tpl();
-				$tpl->newTemplate("motd.master");
+				$tpl->newTemplate('motd.master');
 				
 				$tpl->setVar('domain',$this->parent_domain['domain']);
 				
 				$motd = escapeshellcmd($this->parent_domain['document_root']).'/var/run/motd';
-				if(@is_file($motd)) exec('rm '.$motd);
+				if(@is_file($motd) || @is_link($motd)) unlink($motd);
 				
-				file_put_contents($motd,$tpl->grab());
+				$app->system->file_put_contents($motd,$tpl->grab());
 				
 			}
             $this->_add_jailkit_programs();
@@ -253,24 +262,28 @@ class cron_jailkit_plugin {
 	
 	function _add_jailkit_programs()
 	{
+		global $app;
+		
 		//copy over further programs and its libraries
 		$command = '/usr/local/ispconfig/server/scripts/create_jailkit_programs.sh';
 		$command .= ' '.escapeshellcmd($this->parent_domain['document_root']);
 		$command .= ' \''.$this->jailkit_config['jailkit_chroot_app_programs'].'\'';
-		exec($command);
+		exec($command.' 2>/dev/null');
 		
 		$this->app->log("Added programs to jailkit chroot with command: ".$command,LOGLEVEL_DEBUG);
         
         $command = '/usr/local/ispconfig/server/scripts/create_jailkit_programs.sh';
         $command .= ' '.escapeshellcmd($this->parent_domain['document_root']);
         $command .= ' \''.$this->jailkit_config['jailkit_chroot_cron_programs'].'\'';
-        exec($command);
+        exec($command.' 2>/dev/null');
         
         $this->app->log("Added cron programs to jailkit chroot with command: ".$command,LOGLEVEL_DEBUG);
 	}
 	
 	function _add_jailkit_user()
 	{
+			global $app;
+			
 			//add the user to the chroot
             $jailkit_chroot_userhome = $this->_get_home_dir($this->parent_domain['system_user']);
 			
@@ -286,11 +299,14 @@ class cron_jailkit_plugin {
 			$command .= ' '.escapeshellcmd($this->parent_domain['document_root']);
 			$command .= ' '.$jailkit_chroot_userhome;
 			$command .= ' '.escapeshellcmd("/bin/bash");
-			exec($command);
+			exec($command.' 2>/dev/null');
 				
 			$this->app->log("Added jailkit user to chroot with command: ".$command,LOGLEVEL_DEBUG);
 				
-			exec("mkdir -p ".escapeshellcmd($this->parent_domain['document_root'].$jailkit_chroot_userhome));
+			$app->system->mkdir(escapeshellcmd($this->parent_domain['document_root'].$jailkit_chroot_userhome), 0755, true);
+			$app->system->chown(escapeshellcmd($this->parent_domain['document_root'].$jailkit_chroot_userhome), escapeshellcmd($this->parent_domain['system_user']));
+			$app->system->chgrp(escapeshellcmd($this->parent_domain['document_root'].$jailkit_chroot_userhome), escapeshellcmd($this->parent_domain['system_group']));
+			
 	}
 	
     function _get_home_dir($username)
@@ -305,19 +321,24 @@ class cron_jailkit_plugin {
 		// load the server configuration options
 		$app->uses("getconf");
 		$web_config = $app->getconf->get_server_config($conf["server_id"], 'web');
-				
-		//* If the security level is set to high
-		if($web_config['security_level'] == 20) {
-			$this->_exec("chmod 755 ".escapeshellcmd($this->parent_domain['document_root']));
-			$this->_exec("chown root:root ".escapeshellcmd($this->parent_domain['document_root']));
-		}
 		
+		// Get the parent website of this shell user
+		$web = $app->db->queryOneRecord("SELECT * FROM web_domain WHERE domain_id = ".$this->data['new']['parent_domain_id']);
+		
+		//* If the security level is set to high
+		if($web_config['security_level'] == 20 && is_array($web)) {
+			$app->system->web_folder_protection($web["document_root"],false);
+			$app->system->chmod($web["document_root"],0755);
+			$app->system->chown($web["document_root"],'root');
+			$app->system->chgrp($web["document_root"],'root');
+			$app->system->web_folder_protection($web["document_root"],true);
+		}
 	}
 	
 	//* Wrapper for exec function for easier debugging
 	private function _exec($command) {
 		global $app;
-		$app->log("exec: ".$command,LOGLEVEL_DEBUG);
+		$app->log('exec: '.$command,LOGLEVEL_DEBUG);
 		exec($command);
 	}
     

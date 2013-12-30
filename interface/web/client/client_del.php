@@ -44,6 +44,7 @@ require_once('../../lib/app.inc.php');
 
 //* Check permissions for module
 $app->auth->check_module_permissions('client');
+if($conf['demo_mode'] == true) $app->error('This function is disabled in demo mode.');
 
 $app->uses('tpl,tform');
 $app->load('tform_actions');
@@ -52,6 +53,9 @@ class page_action extends tform_actions {
 	
 	function onDelete() {
 		global $app, $conf,$list_def_file,$tform_def_file;
+		
+		// Loading tform framework
+        if(!is_object($app->tform)) $app->uses('tform');
 		
 		if($_POST["confirm"] == 'yes') {
 			parent::onDelete();
@@ -62,25 +66,25 @@ class page_action extends tform_actions {
 		$app->tpl->setInclude('content_tpl', 'templates/client_del.htm');
 		
 		include_once($list_def_file);
-
-        // Loading tform framework
-        if(!is_object($app->tform)) $app->uses('tform');
-
-        // Load table definition from file
+		
+		// Load table definition from file
         $app->tform->loadFormDef($tform_def_file);
 		
-		$this->id = intval($_REQUEST["id"]);
+		$this->id = $app->functions->intval($_REQUEST["id"]);
 		
 		$this->dataRecord = $app->tform->getDataRecord($this->id);
-		$client_id = intval($this->dataRecord['client_id']);
-		//$parent_client_id = intval($this->dataRecord['parent_client_id']);
+		$client_id = $app->functions->intval($this->dataRecord['client_id']);
+
+        
+		//$parent_client_id = $app->functions->intval($this->dataRecord['parent_client_id']);
 		//$parent_user = $app->db->queryOneRecord("SELECT userid FROM sys_user WHERE client_id = $parent_client_id");
 		$client_group = $app->db->queryOneRecord("SELECT groupid FROM sys_group WHERE client_id = $client_id");
 		
 		// Get all records (sub-clients, mail, web, etc....)  of this client.
-		$tables = 'client,dns_rr,dns_soa,ftp_user,mail_access,mail_content_filter,mail_domain,mail_forwarding,mail_get,mail_user,mail_user_filter,shell_user,spamfilter_users,support_message,web_database,web_domain,web_traffic';
+		$tables = 'cron,client,dns_rr,dns_soa,dns_slave,ftp_user,mail_access,mail_content_filter,mail_domain,mail_forwarding,mail_get,mail_user,mail_user_filter,shell_user,spamfilter_users,support_message,web_database,web_database_user,web_domain';
 		$tables_array = explode(',',$tables);
-		$client_group_id = intval($client_group['groupid']);
+		$client_group_id = $app->functions->intval($client_group['groupid']);
+		
 		$table_list = array();
 		if($client_group_id > 1) {
 			foreach($tables_array as $table) {
@@ -93,6 +97,7 @@ class page_action extends tform_actions {
 		}
 		
 		$app->tpl->setVar('id',$this->id);
+		$app->tpl->setVar('number_records',$number);
 		$app->tpl->setLoop('records', $table_list);
 		
 		//* load language file 
@@ -108,14 +113,14 @@ class page_action extends tform_actions {
 	
 	
 	
-	function onAfterDelete() {
+	function onBeforeDelete() {
 		global $app, $conf;
 		
-		$client_id = intval($this->dataRecord['client_id']);
+		$client_id = $app->functions->intval($this->dataRecord['client_id']);
 		
 		if($client_id > 0) {			
 			// remove the group of the client from the resellers group
-			$parent_client_id = intval($this->dataRecord['parent_client_id']);
+			$parent_client_id = $app->functions->intval($this->dataRecord['parent_client_id']);
 			$parent_user = $app->db->queryOneRecord("SELECT userid FROM sys_user WHERE client_id = $parent_client_id");
 			$client_group = $app->db->queryOneRecord("SELECT groupid FROM sys_group WHERE client_id = $client_id");
 			$app->auth->remove_group_from_user($parent_user['userid'],$client_group['groupid']);
@@ -127,24 +132,32 @@ class page_action extends tform_actions {
 			$app->db->query("DELETE FROM sys_user WHERE client_id = $client_id");
 			
 			// Delete all records (sub-clients, mail, web, etc....)  of this client.
-			$tables = 'client,dns_rr,dns_soa,ftp_user,mail_access,mail_content_filter,mail_domain,mail_forwarding,mail_get,mail_user,mail_user_filter,shell_user,spamfilter_users,support_message,web_database,web_domain,web_traffic';
+			$tables = 'client,dns_rr,dns_soa,dns_slave,ftp_user,mail_access,mail_content_filter,mail_domain,mail_forwarding,mail_get,mail_user,mail_user_filter,shell_user,spamfilter_users,support_message,web_database,web_database_user,web_domain,web_folder,web_folder_user,domain';
 			$tables_array = explode(',',$tables);
-			$client_group_id = intval($client_group['groupid']);
+			$client_group_id = $app->functions->intval($client_group['groupid']);
 			if($client_group_id > 1) {
 				foreach($tables_array as $table) {
 					if($table != '') {
 						$records = $app->db->queryAllRecords("SELECT * FROM $table WHERE sys_groupid = ".$client_group_id);
-						// find the primary ID of the table
+						//* find the primary ID of the table
 						$table_info = $app->db->tableInfo($table);
 						$index_field = '';
 						foreach($table_info as $tmp) {
 							if($tmp['option'] == 'primary') $index_field = $tmp['name'];
 						}
-						// Delete the records
+						//* Delete the records
 						if($index_field != '') {
 							if(is_array($records)) {
 								foreach($records as $rec) {
 									$app->db->datalogDelete($table, $index_field, $rec[$index_field]);
+									//* Delete traffic records that dont have a sys_groupid column
+									if($table == 'web_domain') {
+										$app->db->query("DELETE FROM web_traffic WHERE hostname = '".$app->db->quote($rec['domain'])."'");
+									}
+									//* Delete mail_traffic records that dont have a sys_groupid
+									if($table == 'mail_user') {
+										$app->db->query("DELETE FROM mail_traffic WHERE mailuser_id = '".$app->db->quote($rec['mailuser_id'])."'");
+									}
 								}
 							}
 						}

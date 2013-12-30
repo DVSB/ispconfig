@@ -25,7 +25,7 @@ $liste["table_idx"]			= "mailget_id";
 $liste["search_prefix"] 	= "search_";
 
 // Records per page
-$liste["records_per_page"] 	= 15;
+$liste["records_per_page"] 	= "15";
 
 // Script File of the list
 $liste["file"]				= "mail_get_list.php";
@@ -91,6 +91,9 @@ $liste["item"][] = array(	'field'		=> "source_username",
 
 $liste["item"][] = array(	'field'		=> "destination",
 							'datatype'	=> "VARCHAR",
+                            'filters'   => array( 0 => array( 'event' => 'SHOW',
+                                                              'type' => 'IDNTOUTF8')
+                                                ),
 							'formtype'	=> "TEXT",
 							'op'		=> "like",
 							'prefix'	=> "%",

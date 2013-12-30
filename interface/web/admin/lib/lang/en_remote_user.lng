@@ -7,6 +7,7 @@ $wb['username_error_empty'] = 'Username cannot be empty';
 $wb['password_error_empty'] = 'Password cannot be empty';
 $wb['password_strength_txt'] = 'Password Strength:';
 $wb['Mail domain functions'] = 'Mail domain functions';
+$wb['Mail mailing list functions'] = 'Mail mailinglist functions';
 $wb['Mail user functions'] = 'Mail user functions';
 $wb['Mail alias functions'] = 'Mail alias functions';
 $wb['Mail forward functions'] = 'Mail forward functions';
@@ -39,4 +40,8 @@ $wb['DNS ptr functions'] = 'DNS ptr functions';
 $wb['DNS rp functions'] = 'DNS rp functions';
 $wb['DNS srv functions'] = 'DNS srv functions';
 $wb['DNS txt functions'] = 'DNS txt functions';
+$wb['generate_password_txt'] = 'Generate Password';
+$wb['repeat_password_txt'] = 'Repeat Password';
+$wb['password_mismatch_txt'] = 'The passwords do not match.';
+$wb['password_match_txt'] = 'The passwords do match.';
 ?>

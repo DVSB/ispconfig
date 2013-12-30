@@ -7,13 +7,13 @@ $liste['name'] = 'remote_user';
 $liste['table'] = 'remote_user';
 
 // Index index field of the database table
-$liste['table_idx'] = 'userid';
+$liste['table_idx'] = 'remote_userid';
 
 // Search Field Prefix
 $liste['search_prefix'] = 'search_';
 
 // Records per page
-$liste['records_per_page']= 15;
+$liste['records_per_page']= "15";
 
 // Script File of the list
 $liste['file'] = 'remote_user_list.php';

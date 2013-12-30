@@ -50,36 +50,38 @@ if(isset($_POST['username']) && $_POST['username'] != '' && $_POST['email'] != '
 	$email = $app->db->quote($_POST['email']);
 	
 	$client = $app->db->queryOneRecord("SELECT * FROM client WHERE username = '$username' AND email = '$email'");
-	
+
 	if($client['client_id'] > 0) {
-		$new_password = md5 (uniqid (rand()));
-		$salt="$1$";
-		$base64_alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-		for ($n=0;$n<8;$n++) {
-			//$salt.=chr(mt_rand(64,126));
-			$salt.=$base64_alphabet[mt_rand(0,63)];
-		}
-		$salt.="$";
-		$new_password_encrypted = crypt($new_password,$salt);
+		$new_password = $app->auth->get_random_password();
+		$new_password_encrypted = $app->auth->crypt_password($new_password);
 		$new_password_encrypted = $app->db->quote($new_password_encrypted);
 		
 		$username = $app->db->quote($client['username']);
 		$app->db->query("UPDATE sys_user SET passwort = '$new_password_encrypted' WHERE username = '$username'");
-		$app->db->query("UPDATE client SET ´password´ = '$new_password_encrypted' WHERE username = '$username'");
+		$app->db->query("UPDATE client SET password = '$new_password_encrypted' WHERE username = '$username'");
 		$app->tpl->setVar("message",$wb['pw_reset']);
 		
-		mail($client['email'],$wb['pw_reset_mail_title'],$wb['pw_reset_mail_msg'].$new_password);
+		$app->uses('getconf,ispcmail');
+		$mail_config = $app->getconf->get_global_config('mail');
+		if($mail_config['smtp_enabled'] == 'y') {
+			$mail_config['use_smtp'] = true;
+			$app->ispcmail->setOptions($mail_config);
+		}
+		$app->ispcmail->setSender($mail_config['admin_mail'], $mail_config['admin_name']);
+		$app->ispcmail->setSubject($wb['pw_reset_mail_title']);
+		$app->ispcmail->setMailText($wb['pw_reset_mail_msg'].$new_password);
+		$app->ispcmail->send(array($client['contact_name'] => $client['email']));
+		$app->ispcmail->finish();
 		
 		$app->plugin->raiseEvent('password_reset',true);
-		
+		$app->tpl->setVar("msg",$wb['pw_reset']);
 	} else {
-		$app->tpl->setVar("message",$wb['pw_error']);
+		$app->tpl->setVar("error",$wb['pw_error']);
 	}
 	
 } else {
-	$app->tpl->setVar("message",$wb['pw_error_noinput']);
+	$app->tpl->setVar("msg",$wb['pw_error_noinput']);
 }
-
 
 
 $app->tpl_defaults();

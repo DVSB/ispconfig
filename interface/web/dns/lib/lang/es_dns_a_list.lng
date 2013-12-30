@@ -11,4 +11,5 @@ $wb['add_new_record_txt'] = 'Añadir nuevo registro A';
 $wb['page_txt'] = 'Página';
 $wb['page_of_txt'] = 'de';
 $wb['delete_confirmation'] = '¿Realmente desea eliminar este registro?';
+$wb['ttl_txt'] = 'TTL';
 ?>

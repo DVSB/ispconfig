@@ -36,5 +36,11 @@ $wb['domain_error_empty'] = 'Domínio em branco.';
 $wb['domain_error_unique'] = 'Já existe alias ou sub-domínio com este nome.';
 $wb['domain_error_regex'] = 'Nome de domínio inválido.';
 $wb['host_txt'] = 'Host';
-$wb['redirect_error_regex'] = 'Invalid redirect path. Valid redirects are for example: /test/ or http://www.domain.tld/test/';
+$wb['redirect_error_regex'] = 'Caminho de redirecionamento inválido. Exemplo de caminho válido: /test/ ou http://www.dominio.ext/test/';
+$wb['no_redirect_txt'] = 'No redirect';
+$wb['no_flag_txt'] = 'No flag';
+$wb['domain_error_wildcard'] = 'Wildcard subdomains are not allowed.';
+$wb['proxy_directives_txt'] = 'Proxy Directives';
+$wb['available_proxy_directive_snippets_txt'] = 'Available Proxy Directive Snippets:';
+$wb['error_proxy_requires_url'] = 'Redirect Type \\"proxy\\" requires a URL as the redirect path.';
 ?>

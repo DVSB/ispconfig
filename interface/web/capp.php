@@ -31,25 +31,49 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 require_once('../lib/config.inc.php');
 require_once('../lib/app.inc.php');
 
-// importiere Modul
+//* Import module variable
 $mod = $_REQUEST["mod"];
+//* If we click on a search result, load that one instead of the module's start page
+$redirect = (isset($_REQUEST["redirect"]) ? $_REQUEST["redirect"] : '');
 
-// Checke ob User eingeloggt
+//* Check if user is logged in
 if($_SESSION["s"]["user"]['active'] != 1) {
-	header("Location: index.php?phpsessid=".$_SESSION["s"]["id"]);
-	die();
+	die("URL_REDIRECT: /index.php");
+	//die();
 }
 
-// checke ob User Modul verwenden darf
+if(!preg_match("/^[a-z]{2,20}$/i", $mod)) die('module name contains unallowed chars.');
+
+//* Check if user may use the module.
 $user_modules = explode(",",$_SESSION["s"]["user"]["modules"]);
 
 if(!in_array($mod,$user_modules)) $app->error($app->lng(301));
 
-// lade Moduldaten in Session
+//* Load module configuration into the session.
 if(is_file($mod."/lib/module.conf.php")) {
 	include_once($mod."/lib/module.conf.php");
-	$_SESSION["s"]["module"] = $module;
-	echo "HEADER_REDIRECT:".$_SESSION["s"]["module"]["startpage"];
+	
+    $menu_dir = ISPC_WEB_PATH.'/' . $mod . '/lib/menu.d';
+
+    if (is_dir($menu_dir)) {
+        if ($dh = opendir($menu_dir)) {
+            //** Go through all files in the menu dir
+            while (($file = readdir($dh)) !== false) {
+                if ($file != '.' && $file != '..' && substr($file, -9, 9) == '.menu.php' && $file != 'dns_resync.menu.php') {
+                    include_once($menu_dir . '/' . $file);
+                }
+            }
+        }
+    }
+    
+    $_SESSION["s"]["module"] = $module;
+	session_write_close();
+	if($redirect == ''){
+		echo "HEADER_REDIRECT:".$_SESSION["s"]["module"]["startpage"];
+	} else {
+		//* If we click on a search result, load that one instead of the module's start page
+		echo "HEADER_REDIRECT:".$redirect;
+	}
 } else {
 	$app->error($app->lng(302));
 }

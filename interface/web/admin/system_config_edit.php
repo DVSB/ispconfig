@@ -1,6 +1,6 @@
 <?php
 /*
-Copyright (c) 2008, Till Brehm, projektfarm Gmbh
+Copyright (c) 2008-2010, Till Brehm, projektfarm Gmbh
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -49,7 +49,9 @@ $app->uses('tpl,tform,tform_actions');
 $app->load('tform_actions');
 
 class page_action extends tform_actions {
-	
+
+	//var $_js_changed = false;
+
 	function onShowEdit() {
 		global $app, $conf;
 		
@@ -62,7 +64,11 @@ class page_action extends tform_actions {
 			$server_id = $this->id;
 		
 			$this->dataRecord = $app->getconf->get_global_config($section);
-			
+			if ($section == 'domains'){
+				if (isset($this->dataRecord['use_domain_module'])){
+					$_SESSION['use_domain_module_old_value'] = $this->dataRecord['use_domain_module'];
+				}
+			}
 		}
 		
 		$record = $app->tform->getHTML($this->dataRecord, $this->active_tab,'EDIT');
@@ -72,8 +78,45 @@ class page_action extends tform_actions {
 		$app->tpl->setVar($record);
 	}
 	
+	function onShowEnd() {
+		global $app, $conf;
+		
+		// available dashlets
+		$available_dashlets_txt = '';
+		$handle = @opendir(ISPC_WEB_PATH.'/dashboard/dashlets'); 
+		while ($file = @readdir ($handle)) { 
+			if ($file != '.' && $file != '..' && !is_dir($file)) {
+				$available_dashlets_txt .= '<a href="javascript:void(0);" class="addPlaceholderContent">['.substr($file,0,-4).']<pre class="addPlaceholderContent" style="display:none;">['.substr($file,0,-4).'],</pre></a> ';
+			}
+		}
+		
+		if($available_dashlets_txt == '') $available_dashlets_txt = '------';
+		$app->tpl->setVar("available_dashlets_txt",$available_dashlets_txt);
+		
+		parent::onShowEnd();
+	}
+	
+    function onSubmit() {
+        global $app;
+        
+        $app->uses('ini_parser,getconf');
+		
+        $section = $app->tform->getCurrentTab();
+		
+		$server_config_array = $app->getconf->get_global_config();
+		$new_config = $app->tform->encode($this->dataRecord,$section);
+        if($section == 'mail') {
+            if($new_config['smtp_pass'] == '') $new_config['smtp_pass'] = $server_config_array['smtp_pass'];
+            if($new_config['smtp_enabled'] == 'y' && ($new_config['admin_mail'] == '' || $new_config['admin_name'] == '')) {
+                $app->tform->errorMessage .= $app->tform->lng("smtp_missing_admin_mail_txt");
+            }
+        }
+        
+        parent::onSubmit();
+    }
+    
 	function onUpdateSave($sql) {
-		global $app;
+		global $app,$conf;
 		
 		if($_SESSION["s"]["user"]["typ"] != 'admin') die('This function needs admin priveliges');
 		$app->uses('ini_parser,getconf');
@@ -81,12 +124,74 @@ class page_action extends tform_actions {
 		$section = $app->tform->getCurrentTab();
 		
 		$server_config_array = $app->getconf->get_global_config();
-		$server_config_array[$section] = $app->tform->encode($this->dataRecord,$section);
+		
+		foreach($app->tform->formDef['tabs'][$section]['fields'] as $key => $field) {
+			if ($field['formtype'] == 'CHECKBOX') {
+				if($this->dataRecord[$key] == '') {
+					// if a checkbox is not set, we set it to the unchecked value
+					$this->dataRecord[$key] = $field['value'][0];
+				}
+			}
+		}
+		
+		/*
+		if((isset($this->dataRecord['use_loadindicator']) && $this->dataRecord['use_loadindicator'] != $server_config_array[$section]['use_loadindicator']) || (isset($this->dataRecord['use_combobox']) && $this->dataRecord['use_combobox'] != $server_config_array[$section]['use_combobox'])){
+			$this->_js_changed = true;
+		}
+		*/
+
+		$new_config = $app->tform->encode($this->dataRecord,$section);
+        if($section == 'sites' && $new_config['vhost_subdomains'] != 'y' && $server_config_array['vhost_subdomains'] == 'y') {
+            // check for existing vhost subdomains, if found the mode cannot be disabled
+            $check = $app->db->queryOneRecord("SELECT COUNT(*) as `cnt` FROM `web_domain` WHERE `type` = 'vhostsubdomain'");
+            if($check['cnt'] > 0) {
+                $new_config['vhost_subdomains'] = 'y';
+            }
+        } elseif($section == 'mail') {
+            if($new_config['smtp_pass'] == '') $new_config['smtp_pass'] = $server_config_array['smtp_pass'];
+        }
+        $server_config_array[$section] = $new_config;
 		$server_config_str = $app->ini_parser->get_ini_string($server_config_array);
 		
-		$sql = "UPDATE sys_ini SET config = '".$app->db->quote($server_config_str)."' WHERE sysini_id = 1";
-		$app->db->query($sql);
+		//$sql = "UPDATE sys_ini SET config = '".$app->db->quote($server_config_str)."' WHERE sysini_id = 1";
+		//if($conf['demo_mode'] != true) $app->db->query($sql);
+		if($conf['demo_mode'] != true) $app->db->datalogUpdate('sys_ini', "config = '".$app->db->quote($server_config_str)."'", 'sysini_id', 1);
+
+		/*
+		 * If we should use the domain-module, we have to insert all existing domains into the table
+		 * (only the first time!)
+		 */
+		if (($section == 'domains') && 
+				($_SESSION['use_domain_module_old_value'] == '') &&
+				($server_config_array['domains']['use_domain_module'] == 'y')){
+			$sql = "REPLACE INTO domain (sys_userid, sys_groupid, sys_perm_user, sys_perm_group, sys_perm_other, domain ) " .
+				"SELECT sys_userid, sys_groupid, sys_perm_user, sys_perm_group, sys_perm_other, domain " .
+				"FROM mail_domain";
+			$app->db->query($sql);
+			$sql = "REPLACE INTO domain (sys_userid, sys_groupid, sys_perm_user, sys_perm_group, sys_perm_other, domain ) " .
+				"SELECT sys_userid, sys_groupid, sys_perm_user, sys_perm_group, sys_perm_other, domain " .
+				"FROM web_domain WHERE type NOT IN ('subdomain','vhostsubdomain')";
+			$app->db->query($sql);
+		}
+		
+		// Maintenance mode
+		if($server_config_array['misc']['maintenance_mode'] == 'y'){
+			//print_r($_SESSION);
+			//echo $_SESSION['s']['id'];
+			$app->db->query("DELETE FROM sys_session WHERE session_id != '".$_SESSION['s']['id']."'");
+		}
 	}
+	
+	/*
+	function onAfterUpdate() {
+        if($this->_js_changed == true) {
+            // not the best way, but it works
+            header('Content-Type: text/html');
+            print '<script type="text/javascript">document.location.reload(true);</script>';
+            exit;
+        }
+    }
+	*/
 	
 }
 

@@ -80,30 +80,56 @@ class postfix_server_plugin {
 		
 		// get the config
 		$app->uses("getconf");
-		$mail_config = $app->getconf->get_server_config($conf["server_id"], 'mail');
+		$old_ini_data = $app->ini_parser->parse_ini_string($data['old']['config']);
+		$mail_config = $app->getconf->get_server_config($conf['server_id'], 'mail');
 		
 		copy('/etc/postfix/main.cf','/etc/postfix/main.cf~');
 		
-		if($mail_config["relayhost"] != '') {
-			exec("postconf -e 'relayhost = ".$mail_config["relayhost"]."'");
-			exec("postconf -e 'smtp_sasl_auth_enable = yes'");
+		if($mail_config['relayhost'] != '') {
+			exec("postconf -e 'relayhost = ".$mail_config['relayhost']."'");
+			if($mail_config['relayhost_user'] != '' && $mail_config['relayhost_password'] != '') {
+				exec("postconf -e 'smtp_sasl_auth_enable = yes'");
+			} else {
+				exec("postconf -e 'smtp_sasl_auth_enable = no'");
+			}
 			exec("postconf -e 'smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd'");
 			exec("postconf -e 'smtp_sasl_security_options ='");
 			
 			// Store the sasl passwd
-			$content = $mail_config["relayhost"]."   ".$mail_config["relayhost_user"].":".$mail_config["relayhost_password"];
+			$content = $mail_config['relayhost'].'   '.$mail_config['relayhost_user'].':'.$mail_config['relayhost_password'];
 			file_put_contents('/etc/postfix/sasl_passwd',$content);
-			exec("chown root:root /etc/postfix/sasl_passwd");
-			exec("chmod 600 /etc/postfix/sasl_passwd");
-			exec("postmap /etc/postfix/sasl_passwd");
-			exec("/etc/init.d/postfix restart");
+			chmod('/etc/postfix/sasl_passwd', 0600);
+			chown('/etc/postfix/sasl_passwd', 'root');
+			chgrp('/etc/postfix/sasl_passwd', 'root');
+			exec('postmap /etc/postfix/sasl_passwd');
+			exec($conf['init_scripts'] . '/' . 'postfix restart');
 			
 		} else {
 			exec("postconf -e 'relayhost ='");
 		}
-		
-		exec("postconf -e 'mailbox_size_limit = ".intval($mail_config["mailbox_size_limit"]*1024*1024)."'");
-		exec("postconf -e 'message_size_limit = ".intval($mail_config["message_size_limit"]*1024*1024)."'");
+
+		if($mail_config['realtime_blackhole_list'] != $old_ini_data['mail']['realtime_blackhole_list']) {
+			$rbl_hosts = trim(preg_replace('/\s+/', '', $mail_config['realtime_blackhole_list']));
+			if($rbl_hosts != ''){
+				$rbl_hosts = explode(",", $rbl_hosts);
+			}
+			$options = explode(", ", exec("postconf -h smtpd_recipient_restrictions"));
+			foreach ($options as $key => $value) {
+				if (!preg_match('/reject_rbl_client/', $value)) {
+					$new_options[] = $value;
+				}
+			}
+			if(is_array($rbl_hosts) && !empty($rbl_hosts)){
+				foreach ($rbl_hosts as $key => $value) {
+					$value = trim($value);
+					if($value != '') $new_options[] = "reject_rbl_client ".$value;
+				}
+			}
+			exec("postconf -e 'smtpd_recipient_restrictions = ".implode(", ", $new_options)."'");
+		}
+
+		exec("postconf -e 'mailbox_size_limit = ".intval($mail_config['mailbox_size_limit']*1024*1024)."'");
+		exec("postconf -e 'message_size_limit = ".intval($mail_config['message_size_limit']*1024*1024)."'");
 		
 	}
 

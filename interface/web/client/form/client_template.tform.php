@@ -157,6 +157,20 @@ $form["tabs"]['limits'] = array (
 			'rows'		=> '',
 			'cols'		=> ''
 		),
+		'limit_mailmailinglist' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'TEXT',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
+														'errmsg'=> 'limit_mailmailinglist_error_notint'),
+									),
+			'default'	=> '-1',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '10',
+			'maxlength'	=> '10',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
 		'limit_mailforward' => array (
 			'datatype'	=> 'INTEGER',
 			'formtype'	=> 'TEXT',
@@ -311,6 +325,68 @@ $form["tabs"]['limits'] = array (
 			'rows'		=> '',
 			'cols'		=> ''
 		),
+		'web_php_options' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOXARRAY',
+			'default'	=> '',
+			'separator' => ',',
+			'valuelimit' => 'client:web_php_options',
+			'value'		=> array('no' => 'Disabled', 'fast-cgi' => 'Fast-CGI', 'cgi' => 'CGI', 'mod' => 'Mod-PHP', 'suphp' => 'SuPHP', 'php-fpm' => 'PHP-FPM')
+		),
+		'limit_cgi' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_ssi' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_perl' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_ruby' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_python' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'force_suexec' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'y',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_hterror' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_wildcard' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_ssl' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
 		'limit_web_aliasdomain' => array (
 			'datatype'	=> 'INTEGER',
 			'formtype'	=> 'TEXT',
@@ -367,6 +443,34 @@ $form["tabs"]['limits'] = array (
 			'rows'		=> '',
 			'cols'		=> ''
 		),
+		'ssh_chroot' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOXARRAY',
+			'validators'	=> array (
+			  0 => array (
+			    'type'=> 'NOTEMPTY',
+			    'errmsg'=> 'ssh_chroot_notempty'
+			  ),
+			),
+			'default'	=> '',
+			'separator' => ',',
+			'valuelimit' => 'client:ssh_chroot',
+			'value'		=> array('no' => 'None', 'jailkit' => 'Jailkit')
+		),
+		'limit_webdav_user' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'TEXT',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
+														'errmsg'=> 'limit_webdav_user_error_notint'),
+									),
+			'default'	=> '0',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '10',
+			'maxlength'	=> '10',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
 		'limit_dns_zone' => array (
 			'datatype'	=> 'INTEGER',
 			'formtype'	=> 'TEXT',
@@ -381,6 +485,20 @@ $form["tabs"]['limits'] = array (
 			'rows'		=> '',
 			'cols'		=> ''
 		),
+                'limit_dns_slave_zone' => array (
+                        'datatype'      => 'INTEGER',
+                        'formtype'      => 'TEXT',
+                        'validators'    => array (      0 => array (    'type'  => 'ISINT',
+                                                                                                                'errmsg'=> 'limit_dns_slave_zone_error_notint'),
+                                                                        ),
+                        'default'       => '0',
+                        'value'         => '',
+                        'separator'     => '',
+                        'width'         => '10',
+                        'maxlength'     => '10',
+                        'rows'          => '',
+                        'cols'          => ''
+                ),
 		'limit_dns_record' => array (
 			'datatype'	=> 'INTEGER',
 			'formtype'	=> 'TEXT',
@@ -464,6 +582,45 @@ $form["tabs"]['limits'] = array (
 			'formtype'	=> 'TEXT',
 			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
 														'errmsg'=> 'limit_traffic_quota_error_notint'),
+									),
+			'default'	=> '-1',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '10',
+			'maxlength'	=> '10',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'limit_openvz_vm' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'TEXT',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
+														'errmsg'=> 'limit_openvz_vm_error_notint'),
+									),
+			'default'	=> '0',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '10',
+			'maxlength'	=> '10',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'limit_openvz_vm_template_id' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'SELECT',
+			'default'	=> '',
+			'datasource'	=> array ( 	'type'	=> 'SQL',
+										'querystring' => 'SELECT template_id,template_name FROM openvz_template WHERE 1 ORDER BY template_name',
+										'keyfield'=> 'template_id',
+										'valuefield'=> 'template_name'
+									 ),
+			'value'		=> array(0 => ' ')
+		),
+		'limit_aps' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'TEXT',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
+														'errmsg'=> 'limit_aps_error_notint'),
 									),
 			'default'	=> '-1',
 			'value'		=> '',

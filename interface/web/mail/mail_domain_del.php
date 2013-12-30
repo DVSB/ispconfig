@@ -59,8 +59,8 @@ class page_action extends tform_actions {
 		// Before we delete the email domain,
 		// we will delete all depending records.
 		
-		// Delete all forwardings where the osurce or destination belongs to this domain
-		$records = $app->db->queryAllRecords("SELECT forwarding_id as id FROM mail_forwarding WHERE source like '%@".$app->db->quote($domain)."' OR destination like '%@".$app->db->quote($domain)."'");
+		// Delete all forwardings where the source or destination belongs to this domain
+		$records = $app->db->queryAllRecords("SELECT forwarding_id as id FROM mail_forwarding WHERE source like '%@".$app->db->quote($domain)."' OR (destination like '%@".$app->db->quote($domain)."' AND type != 'forward')");
 		foreach($records as $rec) {
 			$app->db->datalogDelete('mail_forwarding','forwarding_id',$rec['id']);
 		}
@@ -78,9 +78,15 @@ class page_action extends tform_actions {
 		}
 		
 		// Delete all spamfilters that belong to this domain
-		$records = $app->db->queryAllRecords("SELECT id FROM spamfilter_users WHERE email = '@".$app->db->quote($domain)."'");
+		$records = $app->db->queryAllRecords("SELECT id FROM spamfilter_users WHERE email = '%@".$app->db->quote($domain)."'");
 		foreach($records as $rec) {
 			$app->db->datalogDelete('spamfilter_users','id',$rec['id']);
+		}
+		
+		// Delete all mailinglists that belong to this domain
+		$records = $app->db->queryAllRecords("SELECT mailinglist_id FROM mail_mailinglist WHERE domain = '".$app->db->quote($domain)."'");
+		foreach($records as $rec) {
+			$app->db->datalogDelete('mail_mailinglist','mailinglist_id',$rec['id']);
 		}
 		
 	}

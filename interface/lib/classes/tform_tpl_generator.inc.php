@@ -119,10 +119,10 @@ class tform_tpl_generator {
 				break;
 			}
 			
-			// Language File Eintrag für "Feld-Titel" anlegen
+			// Language File Eintrag fÃ¼r "Feld-Titel" anlegen
 			$lang[$key."_txt"] = $key;
 			
-			// language File Eintrag, für error-Text anlegen
+			// language File Eintrag, fÃ¼r error-Text anlegen
 			if(isset($field["errmsg"]) && $field["errmsg"] != '') {
 				$errmsg = $field["errmsg"];
 				$lang[$errmsg] = $errmsg;
@@ -136,8 +136,8 @@ class tform_tpl_generator {
     <input type=\"hidden\" name=\"id\" value=\"{tmpl_var name='id'}\">
 
     <div class=\"buttonHolder buttons\">
-      <button class=\"positive iconstxt icoPositive\" type=\"button\" value=\"{tmpl_var name='btn_save_txt'}\" onClick=\"submitForm('pageForm','".$module."/".$formDef["action"]."');\"><span>{tmpl_var name='btn_save_txt'}</span></button>
-      <button class=\"negative iconstxt icoNegative\" type=\"button\" value=\"{tmpl_var name='btn_cancel_txt'}\" onClick=\"loadContent('".$module."/".$formDef["list_default"]."');\"><span>{tmpl_var name='btn_cancel_txt'}</span></button>
+      <button class=\"positive iconstxt icoPositive\" type=\"button\" value=\"{tmpl_var name='btn_save_txt'}\" onclick=\"submitForm('pageForm','".$module."/".$formDef["action"]."');\"><span>{tmpl_var name='btn_save_txt'}</span></button>
+      <button class=\"negative iconstxt icoNegative\" type=\"button\" value=\"{tmpl_var name='btn_cancel_txt'}\" onclick=\"loadContent('".$module."/".$formDef["list_default"]."');\"><span>{tmpl_var name='btn_cancel_txt'}</span></button>
     </div>
   </div>
   
@@ -147,7 +147,7 @@ class tform_tpl_generator {
 				
 		// speichere Template
 		if (!$handle = fopen($formDef['tabs'][$tab]['template'], 'w')) { 
-        	print "Cannot open file ($filename)"; 
+        	print "Cannot open file (".$formDef['tabs'][$tab]['template'].")"; 
         	exit; 
    		} 
  
@@ -159,7 +159,7 @@ class tform_tpl_generator {
 		
 		$this->lng_add($lang,$formDef);
 		
-		// überprüfe, ob es die Tabelle schon gibt,
+		// Ã¼berprÃ¼fe, ob es die Tabelle schon gibt,
 		// ansonsten wird sie angelegt
 		$tables = $app->db->getTables();
 		
@@ -168,7 +168,7 @@ class tform_tpl_generator {
 			
 			$columns = array();
 			
-			// füge ID Feld hinzu
+			// fÃ¼ge ID Feld hinzu
 			$col = array(	'action' 		=> 'add',
 							'name'			=> $formDef["db_table_idx"],
 							'type'			=> 'int64',
@@ -309,9 +309,9 @@ class tform_tpl_generator {
 		
 		if(is_array($wb_out)) {
 			$fp = fopen ($lng_file, "w");
-			fwrite($fp,"<?php\r\n");
+			fwrite($fp,"<?php\n");
 			foreach($wb_out as $key => $val) {
-				$new_line = '$wb["'.$key.'"] = '."'$val';\r\n";
+				$new_line = '$wb["'.$key.'"] = '."'$val';\n";
 				fwrite($fp,$new_line);
 				
 			}

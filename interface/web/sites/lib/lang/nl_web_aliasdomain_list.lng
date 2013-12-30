@@ -1,11 +1,14 @@
 <?php
-$wb['list_head_txt'] = 'Website domeinaliassen';
+$wb['list_head_txt'] = 'Aliasdomein';
 $wb['active_txt'] = 'Actief';
 $wb['server_id_txt'] = 'Server';
 $wb['parent_domain_id_txt'] = 'Website';
-$wb['domain_txt'] = 'Domeinalias';
-$wb['add_new_record_txt'] = 'Nieuwe domeinalias toevoegen';
-$wb['domain_error_empty'] = 'Domein is leeg.';
+$wb['domain_txt'] = 'Aliasdomein';
+$wb['add_new_record_txt'] = 'Toevoegen nieuw aliasdomein';
+$wb['domain_error_empty'] = 'Domein is niet ingvuld.';
 $wb['domain_error_unique'] = 'Domein moet uniek zijn.';
-$wb['domain_error_regex'] = 'Domeinnaam is ongeldig.';
+$wb['domain_error_regex'] = 'Domeinnaam ongeldig.';
+$wb['no_redirect_txt'] = 'No redirect';
+$wb['no_flag_txt'] = 'No flag';
+$wb['none_txt'] = 'None';
 ?>

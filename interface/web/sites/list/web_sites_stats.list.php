@@ -25,7 +25,7 @@ $liste["table_idx"]			= "domain_id";
 $liste["search_prefix"] 	= "search_";
 
 // Records per page
-$liste["records_per_page"] 	= 15;
+$liste["records_per_page"] 	= "15";
 
 // Script File of the list
 $liste["file"]				= "web_sites_stats.php";
@@ -49,6 +49,9 @@ $liste["auth"]				= "yes";
 
 $liste["item"][] = array(	'field'		=> "domain",
 							'datatype'	=> "VARCHAR",
+                            'filters'   => array( 0 => array( 'event' => 'SHOW',
+                                                              'type' => 'IDNTOUTF8')
+                                                ),
 							'formtype'	=> "TEXT",
 							'op'		=> "like",
 							'prefix'	=> "%",

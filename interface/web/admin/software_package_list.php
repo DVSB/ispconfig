@@ -40,7 +40,7 @@ if(!$app->auth->is_admin()) die('only allowed for administrators.');
 //* Get the latest packages from the repositorys and insert them in the local database
 $packages_added = 0;
 $repos = $app->db->queryAllRecords("SELECT software_repo_id, repo_url, repo_username, repo_password FROM software_repo WHERE active = 'y'");
-if(is_array($repos)) {
+if(is_array($repos) && isset($_GET['action']) && $_GET['action'] == 'repoupdate' ) {
 	foreach($repos as $repo) {
 		$client = new SoapClient(null, array('location' => $repo['repo_url'],
                                      		 'uri'      => $repo['repo_url']));
@@ -50,16 +50,27 @@ if(is_array($repos)) {
 			foreach($packages as $p) {
 				$package_name = $app->db->quote($p['name']);
 				$tmp = $app->db->queryOneRecord("SELECT package_id FROM software_package WHERE package_name = '$package_name'");
+				
+				$package_title = $app->db->quote($p['title']);
+				$package_description = $app->db->quote($p['description']);
+				$software_repo_id = $app->functions->intval($repo['software_repo_id']);
+				$package_type = $app->db->quote($p['type']);
+				$package_installable = $app->db->quote($p['installable']);
+				$package_requires_db = $app->db->quote($p['requires_db']);
+				$package_remote_functions = $app->db->quote($p['remote_functions']);
+				
 				if(empty($tmp['package_id'])) {
-					
-					$package_title = $app->db->quote($p['title']);
-					$package_description = $app->db->quote($p['description']);
-					$software_repo_id = intval($repo['software_repo_id']);
-					$package_type = $app->db->quote($p['type']);
-					
-					$sql = "INSERT INTO software_package (software_repo_id, package_name, package_title, package_description,package_type) VALUES ($software_repo_id, '$package_name', '$package_title', '$package_description','$package_type')";
-					$app->db->query($sql);
+					//$sql = "INSERT INTO software_package (software_repo_id, package_name, package_title, package_description,package_type,package_installable,package_requires_db) VALUES ($software_repo_id, '$package_name', '$package_title', '$package_description','$package_type','$package_installable','$package_requires_db')";
+					//$app->db->query($sql);
+					$insert_data = "(software_repo_id, package_name, package_title, package_description,package_type,package_installable,package_requires_db,package_remote_functions) VALUES ($software_repo_id, '$package_name', '$package_title', '$package_description','$package_type','$package_installable','$package_requires_db','$package_remote_functions')";
+					$app->db->datalogInsert('software_package', $insert_data, 'package_id');
 					$packages_added++;
+				} else {
+					//$sql = "UPDATE software_package SET software_repo_id = $software_repo_id, package_title = '$package_title', package_description = '$package_description', package_type = '$package_type', package_installable = '$package_installable', package_requires_db = '$package_requires_db' WHERE package_name = '$package_name'";
+					//$app->db->query($sql);
+					$update_data = "software_repo_id = $software_repo_id, package_title = '$package_title', package_description = '$package_description', package_type = '$package_type', package_installable = '$package_installable', package_requires_db = '$package_requires_db', package_remote_functions = '$package_remote_functions'";
+					//echo $update_data;
+					$app->db->datalogUpdate('software_package', $update_data, 'package_id',$tmp['package_id']);
 				}
 			}
 		}
@@ -75,13 +86,13 @@ if(is_array($repos)) {
                     foreach($updates as $u) {
                         
                         $version_array = explode('.',$u['version']);
-                        $v1 = intval($version_array[0]);
-                        $v2 = intval($version_array[1]);
-                        $v3 = intval($version_array[2]);
-                        $v4 = intval($version_array[3]);
+                        $v1 = $app->functions->intval($version_array[0]);
+                        $v2 = $app->functions->intval($version_array[1]);
+                        $v3 = $app->functions->intval($version_array[2]);
+                        $v4 = $app->functions->intval($version_array[3]);
                         
                         $package_name = $app->db->quote($u['package_name']);
-                        $software_repo_id = intval($repo['software_repo_id']);
+                        $software_repo_id = $app->functions->intval($repo['software_repo_id']);
                         $update_url = $app->db->quote($u['url']);
                         $update_md5 = $app->db->quote($u['md5']);
                         $update_dependencies = (isset($u['dependencies']))?$app->db->quote($u['dependencies']):'';
@@ -93,10 +104,13 @@ if(is_array($repos)) {
                         $tmp = $app->db->queryOneRecord($sql);
                         if(!isset($tmp['software_update_id'])) {
                             // Insert the update in the datbase
-                            $sql = "INSERT INTO software_update (software_repo_id, package_name, update_url, update_md5, update_dependencies, update_title, v1, v2, v3, v4, type) 
-                            VALUES ($software_repo_id, '$package_name', '$update_url', '$update_md5', '$update_dependencies', '$update_title', '$v1', '$v2', '$v3', '$v4', '$type')";
+                            //$sql = "INSERT INTO software_update (software_repo_id, package_name, update_url, update_md5, update_dependencies, update_title, v1, v2, v3, v4, type) 
+                            //VALUES ($software_repo_id, '$package_name', '$update_url', '$update_md5', '$update_dependencies', '$update_title', '$v1', '$v2', '$v3', '$v4', '$type')";
                             //die($sql);
-                            $app->db->query($sql);
+                            //$app->db->query($sql);
+							$insert_data = "(software_repo_id, package_name, update_url, update_md5, update_dependencies, update_title, v1, v2, v3, v4, type) 
+                            VALUES ($software_repo_id, '$package_name', '$update_url', '$update_md5', '$update_dependencies', '$update_title', '$v1', '$v2', '$v3', '$v4', '$type')";
+							$app->db->datalogInsert('software_update', $insert_data, 'software_update_id');
                         }
                         
                     }
@@ -107,9 +121,10 @@ if(is_array($repos)) {
 }
 
 //* Install packages, if GET Request
+/*
 if(isset($_GET['action']) && $_GET['action'] == 'install' && $_GET['package'] != '' && $_GET['server_id'] > 0) {
 	$package_name = $app->db->quote($_GET['package']);
-	$server_id = intval($_GET['server_id']);
+	$server_id = $app->functions->intval($_GET['server_id']);
 	$sql = "SELECT software_update_id, package_name, update_title FROM software_update WHERE type = 'full' AND package_name = '$package_name' ORDER BY v1 DESC, v2 DESC, v3 DESC, v4 DESC LIMIT 0,1";
 	$tmp = $app->db->queryOneRecord($sql);
 	$software_update_id = $tmp['software_update_id'];
@@ -117,8 +132,8 @@ if(isset($_GET['action']) && $_GET['action'] == 'install' && $_GET['package'] !=
 	$insert_data = "(package_name, server_id, software_update_id, status) VALUES ('$package_name', '$server_id', '$software_update_id','installing')";
 	// $insert_data = "(package_name, server_id, software_update_id, status) VALUES ('$package_name', '$server_id', '$software_update_id','installed')";
 	$app->db->datalogInsert('software_update_inst', $insert_data, 'software_update_inst_id');
-	
 }
+*/
 
 
 
@@ -131,7 +146,7 @@ $app->tpl->setInclude('content_tpl','templates/software_package_list.htm');
 
 $servers = $app->db->queryAllRecords('SELECT server_id, server_name FROM server ORDER BY server_name');
 $packages = $app->db->queryAllRecords('SELECT * FROM software_package');
-if(is_array($packages)) {
+if(is_array($packages) && count($packages) > 0) {
 	foreach($packages as $key => $p) {
 		$installed_txt = '';
 		foreach($servers as $s) {
@@ -139,26 +154,35 @@ if(is_array($packages)) {
 			$version = $inst['v1'].'.'.$inst['v2'].'.'.$inst['v3'].'.'.$inst['v4'];
 			
 			if($inst['status'] == 'installed') {
-				$installed_txt .= $s['server_name'].": Installed version $version<br />";
+				$installed_txt .= $s['server_name'].": ".$app->lng("Installed version $version")."<br />";
             } elseif ($inst['status'] == 'installing') {
-                $installed_txt .= $s['server_name'].": Installation in progress<br />";
+                $installed_txt .= $s['server_name'].": ".$app->lng("Installation in progress")."<br />";
             } elseif ($inst['status'] == 'failed') {
-                $installed_txt .= $s['server_name'].": Installation failed<br />";
+                $installed_txt .= $s['server_name'].": ".$app->lng("Installation failed")."<br />";
 			} elseif ($inst['status'] == 'deleting') {
-				$installed_txt .= $s['server_name'].": Deletion in progress<br />";
+				$installed_txt .= $s['server_name'].": ".$app->lng("Deletion in progress")."<br />";
 			} else {
-				$installed_txt .= $s['server_name'].": <a href=\"#\" onClick=\"loadContent('admin/software_package_list.php?action=install&package=".$p["package_name"]."&server_id=".$s["server_id"]."');\">Install now</a><br />";
+				if($p['package_installable'] == 'no') {
+					$installed_txt .= $s['server_name'].": ".$app->lng("Package can not be installed.")."<br />";
+				} else {
+					$installed_txt .= $s['server_name'].": <a href=\"#\" onclick=\"loadContent('admin/software_package_install.php?package=".$p["package_name"]."&server_id=".$s["server_id"]."');\">Install now</a><br />";
+				}
 			}
 		}
+		$packages[$key]['software_update_inst_id'] = intval($inst['software_update_inst_id']);
 		$packages[$key]['installed'] = $installed_txt;
 	}
+	$app->tpl->setVar('has_packages',1);
+} else {
+	$app->tpl->setVar('has_packages',0);
 }
 
 
 
 $app->tpl->setLoop('records',$packages);
 
-include_once('lib/lang/en_software_package_list.lng');
+$language = (isset($_SESSION['s']['language']))?$_SESSION['s']['language']:$conf['language'];
+include_once('lib/lang/'.$language.'_software_package_list.lng');
 $app->tpl->setVar($wb);
 
 

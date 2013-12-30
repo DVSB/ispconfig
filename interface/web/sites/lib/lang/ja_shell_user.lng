@@ -1,6 +1,4 @@
 <?php
-$wb['uid_txt'] = 'ユーザー';
-$wb['gid_txt'] = 'グループ';
 $wb['shell_txt'] = 'Shell';
 $wb['dir_txt'] = 'ディレクトリ';
 $wb['server_id_txt'] = 'サーバー';
@@ -19,4 +17,15 @@ $wb['uid_error_empty'] = 'GID を指定してください。';
 $wb['directory_error_empty'] = 'ディレクトリを指定してください。';
 $wb['limit_shell_user_txt'] = 'Shellユーザーが最大数に達しました。';
 $wb['parent_domain_id_error_empty'] = 'ウェブサイトを選択してください。';
+$wb['puser_txt'] = 'Web Username';
+$wb['pgroup_txt'] = 'Web Group';
+$wb['ssh_rsa_txt'] = 'SSH-RSA Public Key (for key-based logins)';
+$wb['dir_dot_error'] = 'No .. in path allowed.';
+$wb['dir_slashdot_error'] = 'No ./ in path allowed.';
+$wb['generate_password_txt'] = 'Generate Password';
+$wb['repeat_password_txt'] = 'Repeat Password';
+$wb['password_mismatch_txt'] = 'The passwords do not match.';
+$wb['password_match_txt'] = 'The passwords do match.';
+$wb['username_must_not_exceed_32_chars_txt'] = 'The username must not exceed 32 characters.';
+$wb['username_not_allowed_txt'] = 'The username is not allowed.';
 ?>

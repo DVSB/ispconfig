@@ -32,6 +32,7 @@ require_once('../../lib/app.inc.php');
 
 //* Check permissions for module
 $app->auth->check_module_permissions('admin');
+if($conf['demo_mode'] == true) $app->error('This function is disabled in demo mode.');
 
 //* This is only allowed for administrators
 if(!$app->auth->is_admin()) die('only allowed for administrators.');
@@ -136,8 +137,8 @@ function merge_langfile($langfile,$masterfile) {
 	
 		$file_content = "<?php\n";
 		foreach($wb as $key => $val) {
-			$val = str_replace("'",'',$val);
-			$val = str_replace('"','',$val);
+			$val = str_replace("'","\\'",$val);
+			$val = str_replace('"','\"',$val);
 			$file_content .= '$wb['."'$key'".'] = '."'$val';\n";
 		}
 		$file_content .= "?>\n";

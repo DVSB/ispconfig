@@ -45,10 +45,10 @@ if (!isset($_GET['id']) && !isset($_GET['cid'])){
 }
 
 if(isset($_GET['id'])) {
-	$userId = intval($_GET['id']);
+	$userId = $app->functions->intval($_GET['id']);
 	$backlink = 'admin/users_list.php';
 } else {
-	$client_id = intval($_GET['cid']);
+	$client_id = $app->functions->intval($_GET['cid']);
 	$tmp_client = $app->db->queryOneRecord("SELECT username FROM client WHERE client_id = $client_id");
 	$tmp_sys_user = $app->db->queryOneRecord("SELECT userid FROM sys_user WHERE username = '".$app->db->quote($tmp_client['username'])."'");
 	$userId = $tmp_sys_user['userid'];
@@ -65,11 +65,16 @@ $dbData = $app->db->queryOneRecord(
 
 /*
  * Now generate the login-Form
+ * TODO: move the login_as form to a template file -> themeability
  */
+ 
+ $lng_file = 'lib/lang/'.$_SESSION['s']['language'].'_login_as.lng';
+include($lng_file);
+ 
 echo '
 	<br /> <br />	<br /> <br />
-	Do you want to login as user ' .  $dbData['username'] . '?<br />
-	If you do so, you can "go back" by clicking at logout.<br />
+	'.$wb['login_1_txt'].' ' .  $dbData['username'] . '?<br />
+	'.$wb['login_2_txt'].'<br />
 	<div style="visibility:hidden">
 		<input type="text" name="username" value="' . $dbData['username'] . '" />
 		<input type="password" name="passwort" value="' . $dbData['passwort'] .'" />
@@ -77,8 +82,8 @@ echo '
 	<input type="hidden" name="s_mod" value="login" />
 	<input type="hidden" name="s_pg" value="index" />
     <div class="wf_actions buttons">
-      <button class="positive iconstxt icoPositive" type="button" value="Yes, login as Client" onClick="submitLoginForm(' . "'pageForm'" . ');"><span>Yes, login as Client</span></button>
-      <button class="negative iconstxt icoNegative" type="button" value="No, back to list" onClick="loadContent('. "'$backlink'" . ');"><span>No, back to list</span></button>
+      <button class="positive iconstxt icoPositive" type="button" value="'.$wb['btn_yes_txt'].'" onclick="submitLoginForm(' . "'pageForm'" . ');"><span>'.$wb['btn_yes_txt'].'</span></button>
+      <button class="negative iconstxt icoNegative" type="button" value="'.$wb['btn_back_txt'].'" onclick="loadContent('. "'$backlink'" . ');"><span>'.$wb['btn_back_txt'].'</span></button>
     </div>
 ';
 ?>

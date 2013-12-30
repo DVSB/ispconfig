@@ -1,5 +1,9 @@
-
 require ["fileinto", "regex", "vacation"];
+
+<tmpl_if name="cc">
+# Send a copy of email to
+redirect "<tmpl_var name='cc'>";
+</tmpl_if>
 
 <tmpl_if name="move_junk" op="==" value="y">
 # Move spam to spam folder
@@ -11,6 +15,8 @@ if header :contains "X-Spam-Flag" "YES" {
 </tmpl_if>
 
 <tmpl_var name='custom_mailfilter'>
+
+keep;
 
 <tmpl_if name="autoresponder" op="==" value="y">
 #################################################################
@@ -26,5 +32,6 @@ if header :contains "X-Spam-Flag" "YES" {
 vacation  :days 1
   :subject "Out of office reply"
   # :addresses ["test@test.int", "till@test.int"]
+  <tmpl_var name='addresses'>
   "<tmpl_var name='autoresponder_text'>";
 </tmpl_if>

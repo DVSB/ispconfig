@@ -45,6 +45,7 @@ protocols = imap imaps pop3 pop3s
 #     ..
 #   }
 #listen = *
+listen = *,[::]
 
 # Disable LOGIN command and all other plaintext authentications unless
 # SSL/TLS is used (LOGINDISABLED capability). Note that if the remote IP
@@ -94,7 +95,7 @@ log_timestamp = "%Y-%m-%d %H:%M:%S "
 #ssl_listen =
 
 # SSL/TLS support: yes, no, required. <doc/wiki/SSL.txt>
-ssl = no
+ssl = yes
 
 # PEM encoded X.509 SSL/TLS certificate and private key. They're opened before
 # dropping root privileges, so keep the key file unreadable by anyone but
@@ -102,6 +103,9 @@ ssl = no
 # certificate, just make sure to update the domains in dovecot-openssl.cnf
 #ssl_cert_file = /etc/ssl/certs/dovecot.pem
 #ssl_key_file = /etc/ssl/private/dovecot.pem
+
+ssl_cert_file = /etc/postfix/smtpd.cert
+ssl_key_file = /etc/postfix/smtpd.key
 
 # If key file is password protected, give the password here. Alternatively
 # give it when starting dovecot with -p parameter. Since this file is often

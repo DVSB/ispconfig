@@ -14,4 +14,12 @@ $wb['pw_error_length'] = 'パスワードの長さが64文字を超えていま�
 $wb['username_txt'] = 'ユーザー名';
 $wb['password_txt'] = 'パスワード';
 $wb['login_button_txt'] = 'ログイン';
+$wb['pw_lost_txt'] = 'Password lost';
+$wb['error_maintenance_mode'] = 'This ISPConfig installation is currently under maintenance. We should be back shortly. Thank you for your patience.';
+$wb['login_txt'] = 'Login';
+$wb['pw_reset_txt'] = 'Password reset';
+$wb['pw_button_txt'] = 'Resend password';
+$wb['email_txt'] = 'Email';
+$wb['theme_not_compatible'] = 'The chosen theme is not compatible with the current ISPConfig version. Please check for a new version of the theme.<br />The default theme as been activated automatically.';
+$wb['back_txt'] = 'Back';
 ?>

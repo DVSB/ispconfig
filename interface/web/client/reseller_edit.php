@@ -40,7 +40,6 @@ $tform_def_file = "form/reseller.tform.php";
 
 require_once('../../lib/config.inc.php');
 require_once('../../lib/app.inc.php');
-require_once('tools.inc.php');
 
 //* Check permissions for module
 $app->auth->check_module_permissions('client');
@@ -104,7 +103,7 @@ class page_action extends tform_actions {
 
 		global $app;
 
-		$sql = "SELECT template_id,template_name FROM client_template WHERE template_type = 'a'";
+		$sql = "SELECT template_id,template_name FROM client_template WHERE template_type = 'a' ORDER BY template_name ASC";
 		$tpls = $app->db->queryAllRecords($sql);
 		$option = '';
 		$tpl = array();
@@ -114,16 +113,30 @@ class page_action extends tform_actions {
 		}
 		$app->tpl->setVar('tpl_add_select',$option);
 
-		$sql = "SELECT template_additional FROM client WHERE client_id = " . $this->id;
-		$result = $app->db->queryOneRecord($sql);
-		$tplAdd = explode("/", $result['template_additional']);
-		$text = '';
-		foreach($tplAdd as $item){
-			if (trim($item) != ''){
-				if ($text != '') $text .= '<br />';
-				$text .= $tpl[$item];
-			}
-		}
+        // check for new-style records
+        $result = $app->db->queryAllRecords('SELECT assigned_template_id, client_template_id FROM client_template_assigned WHERE client_id = ' . $this->id);
+        if($result && count($result) > 0) {
+            // new style
+            $text = '';
+            foreach($result as $item){
+                if (trim($item['client_template_id']) != ''){
+                    if ($text != '') $text .= '';
+                    $text .= '<li rel="' . $item['assigned_template_id'] . '">' . $tpl[$item['client_template_id']]. '<a href="#" class="button icons16 icoDelete"></a></li>';
+                }
+            }
+        } else {
+            // old style
+            $sql = "SELECT template_additional FROM client WHERE client_id = " . $this->id;
+            $result = $app->db->queryOneRecord($sql);
+            $tplAdd = explode("/", $result['template_additional']);
+            $text = '';
+            foreach($tplAdd as $item){
+                if (trim($item) != ''){
+                    if ($text != '') $text .= '';
+                    $text .= '<li>' . $tpl[$item]. '<a href="#" class="button icons16 icoDelete"></a></li>';
+                }
+            }
+        }
 
 		$app->tpl->setVar('template_additional_list', $text);
 
@@ -136,30 +149,48 @@ class page_action extends tform_actions {
 	 the data was successful inserted in the database.
 	*/
 	function onAfterInsert() {
-		global $app;
+		global $app, $conf;
 		// Create the group for the reseller
-		$groupid = $app->db->datalogInsert('sys_group', "(name,description,client_id) VALUES ('".mysql_real_escape_string($this->dataRecord["username"])."','',".$this->id.")", 'groupid');
+		$groupid = $app->db->datalogInsert('sys_group', "(name,description,client_id) VALUES ('".$app->db->quote($this->dataRecord["username"])."','',".$this->id.")", 'groupid');
 		$groups = $groupid;
 		
 		$username = $app->db->quote($this->dataRecord["username"]);
 		$password = $app->db->quote($this->dataRecord["password"]);
-		$modules = ISPC_INTERFACE_MODULES_ENABLED.',client';
-		$startmodule = 'client';
+		$modules = $conf['interface_modules_enabled'] . ',client';
+		$startmodule = (stristr($modules,'dashboard'))?'dashboard':'client'; 
 		$usertheme = $app->db->quote($this->dataRecord["usertheme"]);
 		$type = 'user';
 		$active = 1;
 		$language = $app->db->quote($this->dataRecord["language"]);
 		
+		$salt="$1$";
+		$base64_alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+		for ($n=0;$n<8;$n++) {
+			$salt.=$base64_alphabet[mt_rand(0,63)];
+		}
+		$salt.="$";
+		$password = crypt(stripslashes($password),$salt);
+		
 		// Create the controlpaneluser for the reseller
 		$sql = "INSERT INTO sys_user (username,passwort,modules,startmodule,app_theme,typ,active,language,groups,default_group,client_id)
-		VALUES ('$username',md5('$password'),'$modules','$startmodule','$usertheme','$type','$active','$language',$groups,$groupid,".$this->id.")";
+		VALUES ('$username','$password','$modules','$startmodule','$usertheme','$type','$active','$language',$groups,$groupid,".$this->id.")";
 		$app->db->query($sql);
 		
 		//* set the number of clients to 1
 		$app->db->query("UPDATE client SET limit_client = 1 WHERE client_id = ".$this->id);
-
-		/* If there is a client-template, process it */
-		applyClientTemplates($this->id);
+		
+		//* Set the default servers
+		$tmp = $app->db->queryOneRecord('SELECT server_id FROM server WHERE mail_server = 1 LIMIT 0,1');
+		$default_mailserver = $app->functions->intval($tmp['server_id']);
+		$tmp = $app->db->queryOneRecord('SELECT server_id FROM server WHERE web_server = 1 LIMIT 0,1');
+		$default_webserver = $app->functions->intval($tmp['server_id']);
+		$tmp = $app->db->queryOneRecord('SELECT server_id FROM server WHERE dns_server = 1 LIMIT 0,1');
+		$default_dnsserver = $app->functions->intval($tmp['server_id']);
+		$tmp = $app->db->queryOneRecord('SELECT server_id FROM server WHERE db_server = 1 LIMIT 0,1');
+		$default_dbserver = $app->functions->intval($tmp['server_id']);
+		
+		$sql = "UPDATE client SET default_mailserver = $default_mailserver, default_webserver = $default_webserver, default_dnsserver = $default_dnsserver, default_slave_dnsserver = $default_dnsserver, default_dbserver = $default_dbserver WHERE client_id = ".$this->id;
+		$app->db->query($sql);
 
 		parent::onAfterInsert();
 	}
@@ -170,10 +201,10 @@ class page_action extends tform_actions {
 	 the data was successful updated in the database.
 	*/
 	function onAfterUpdate() {
-		global $app;
+		global $app, $conf;
 		
 		// username changed
-		if(isset($this->dataRecord['username']) && $this->dataRecord['username'] != '' && $this->oldDataRecord['username'] != $this->dataRecord['username']) {
+		if(isset($conf['demo_mode']) && $conf['demo_mode'] != true && isset($this->dataRecord['username']) && $this->dataRecord['username'] != '' && $this->oldDataRecord['username'] != $this->dataRecord['username']) {
 			$username = $app->db->quote($this->dataRecord["username"]);
 			$client_id = $this->id;
 			$sql = "UPDATE sys_user SET username = '$username' WHERE client_id = $client_id";
@@ -185,24 +216,43 @@ class page_action extends tform_actions {
 		}
 		
 		// password changed
-		if(isset($this->dataRecord["password"]) && $this->dataRecord["password"] != '') {
+		if(isset($conf['demo_mode']) && $conf['demo_mode'] != true && isset($this->dataRecord["password"]) && $this->dataRecord["password"] != '') {
 			$password = $app->db->quote($this->dataRecord["password"]);
 			$client_id = $this->id;
-			$sql = "UPDATE sys_user SET passwort = md5('$password') WHERE client_id = $client_id";
+			$salt="$1$";
+			$base64_alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+			for ($n=0;$n<8;$n++) {
+				$salt.=$base64_alphabet[mt_rand(0,63)];
+			}
+			$salt.="$";
+			$password = crypt(stripslashes($password),$salt);
+			$sql = "UPDATE sys_user SET passwort = '$password' WHERE client_id = $client_id";
 			$app->db->query($sql);
+		}
+		
+		// language changed
+		if(isset($conf['demo_mode']) && $conf['demo_mode'] != true && isset($this->dataRecord['language']) && $this->dataRecord['language'] != '' && $this->oldDataRecord['language'] != $this->dataRecord['language']) {
+			$language = $app->db->quote($this->dataRecord["language"]);
+			$client_id = $this->id;
+			$sql = "UPDATE sys_user SET language = '$language' WHERE client_id = $client_id";
+			$app->db->query($sql);
+		}
+		
+		// ensure that a reseller is not converted to a client in demo mode when client_id <= 2
+		if(isset($conf['demo_mode']) && $conf['demo_mode'] == true && $this->id <= 2) {
+			if(isset($this->dataRecord["limit_client"]) && $this->dataRecord["limit_client"] != -1) {
+				$app->db->query('UPDATE client set limit_client = -1 WHERE client_id = '.$this->id);
+			}
 		}
 		
 		// reseller status changed
 		if(isset($this->dataRecord["limit_client"]) && $this->dataRecord["limit_client"] != $this->oldDataRecord["limit_client"]) {
-			$modules = ISPC_INTERFACE_MODULES_ENABLED.',client';
+			$modules = $conf['interface_modules_enabled'] . ',client';
 			$modules = $app->db->quote($modules);
 			$client_id = $this->id;
 			$sql = "UPDATE sys_user SET modules = '$modules' WHERE client_id = $client_id";
 			$app->db->query($sql);
 		}
-		/*
-		 *  If there is a client-template, process it */
-		applyClientTemplates($this->id);
 
 		parent::onAfterUpdate();
 	}

@@ -14,7 +14,9 @@ $wb['Records'] = 'Wpisy';
 $wb['DNS SRV'] = 'DNS SRV';
 $wb['DNS TXT Record'] = 'Wpis DNS TXT';
 $wb['DNS TXT'] = 'DNS TXT';
-$wb['DNS Wizard'] = 'DNS Wizard';
-$wb['Add DNS Zone'] = 'Add DNS Zone';
-$wb['Templates'] = 'Templates';
+$wb['DNS Wizard'] = 'Kreator DNS';
+$wb['Add DNS Zone'] = 'Dodaj strefę DNS';
+$wb['Templates'] = 'Szablony';
+$wb['Secondary Zones'] = 'Strefy Zapasowe';
+$wb['Import Zone File'] = 'Import pliku Strefy';
 ?>

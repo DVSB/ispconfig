@@ -25,7 +25,7 @@ $liste["table_idx"]			= "domain_id";
 $liste["search_prefix"] 	= "search_";
 
 // Records per page
-$liste["records_per_page"] 	= 15;
+$liste["records_per_page"] 	= "15";
 
 // Script File of the list
 $liste["file"]				= "web_aliasdomain_list.php";
@@ -74,10 +74,13 @@ $liste["item"][] = array(	'field'		=> "server_id",
 
 $liste["item"][] = array(	'field'		=> "parent_domain_id",
 							'datatype'	=> "VARCHAR",
+                            'filters'   => array( 0 => array( 'event' => 'SHOW',
+                                                              'type' => 'IDNTOUTF8')
+                                                ),
 							'formtype'	=> "SELECT",
-							'op'		=> "like",
-							'prefix'	=> "%",
-							'suffix'	=> "%",
+							'op'		=> "=",
+							'prefix'	=> "",
+							'suffix'	=> "",
 							'datasource'	=> array ( 	'type'	=> 'SQL',
 										'querystring' => "SELECT domain_id,domain FROM web_domain WHERE type = 'vhost' AND {AUTHSQL} ORDER BY domain",
 										'keyfield'=> 'domain_id',
@@ -88,6 +91,9 @@ $liste["item"][] = array(	'field'		=> "parent_domain_id",
 
 $liste["item"][] = array(	'field'		=> "domain",
 							'datatype'	=> "VARCHAR",
+                            'filters'   => array( 0 => array( 'event' => 'SHOW',
+                                                              'type' => 'IDNTOUTF8')
+                                                ),
 							'formtype'	=> "TEXT",
 							'op'		=> "like",
 							'prefix'	=> "%",

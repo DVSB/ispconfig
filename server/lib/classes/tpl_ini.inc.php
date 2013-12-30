@@ -43,17 +43,19 @@ if (!defined('vlibIniClassLoaded')) {
     class vlibIni {
 
         /** config vars for vlibTemplate */
-        function vlibTemplate () {
+        public static function vlibTemplate () {
         	
         	global $conf;
 			
 			$tpl_dir = $conf["rootpath"]."/conf";
+			$include_paths = array($conf["rootpath"].'/conf-custom');
 			
             return array(
 
                         'TEMPLATE_DIR' => $tpl_dir,   // Default directory for your template files (full path)
                                                                    // leave the '/' or '\' off the end of the directory.
-
+						'INCLUDE_PATHS' => $include_paths, // The include path is always searched first for a template file before the template_dir is checked
+						
                         'MAX_INCLUDES' => 10,                      // Drill depth for tmpl_include's
 
                         'GLOBAL_VARS' => 1,                        // if set to 1, any variables not found in a
@@ -102,7 +104,7 @@ if (!defined('vlibIniClassLoaded')) {
 
 
         /** config vars for vlibDate */
-        function vlibDate () {
+        public function vlibDate () {
 
             return array(
                         'DEFAULT_LANG' => 'de'                     // default language for the date displays

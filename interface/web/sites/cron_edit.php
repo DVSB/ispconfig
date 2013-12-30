@@ -104,7 +104,8 @@ class page_action extends tform_actions {
 		}
 		
         // Get the record of the parent domain
-        $parent_domain = $app->db->queryOneRecord("select * FROM web_domain WHERE domain_id = ".intval(@$this->dataRecord["parent_domain_id"]));
+        $parent_domain = $app->db->queryOneRecord("select * FROM web_domain WHERE domain_id = ".$app->functions->intval(@$this->dataRecord["parent_domain_id"]) . " AND ".$app->tform->getAuthSQL('r'));
+        if(!$parent_domain || $parent_domain['domain_id'] != @$this->dataRecord['parent_domain_id']) $app->tform->errorMessage .= $app->tform->lng("no_domain_perm");
         
         // Set fixed values
         $this->dataRecord["server_id"] = $parent_domain["server_id"];
@@ -114,9 +115,18 @@ class page_action extends tform_actions {
         if(preg_match("'^http(s)?:\/\/'i", $command)) {
             $this->dataRecord["type"] = 'url';
         } else {
-            $domain_owner = $app->db->queryOneRecord("SELECT limit_cron_type FROM sys_group, client WHERE sys_group.client_id = client.client_id and sys_group.groupid = ".intval($parent_domain["sys_groupid"]));
-            if($domain_owner["limit_cron_type"] == 'full') $this->dataRecord["type"] = 'full';
-            else $this->dataRecord["type"] = 'chrooted';
+            $domain_owner = $app->db->queryOneRecord("SELECT limit_cron_type FROM sys_group, client WHERE sys_group.client_id = client.client_id and sys_group.groupid = ".$app->functions->intval($parent_domain["sys_groupid"]));
+            //* True when the site is assigned to a client
+			if(isset($domain_owner["limit_cron_type"])) {
+				if($domain_owner["limit_cron_type"] == 'full') {
+					$this->dataRecord["type"] = 'full';
+				} else {
+					$this->dataRecord["type"] = 'chrooted';
+				}
+			} else {
+				//* True when the site is assigned to the admin
+				$this->dataRecord["type"] = 'full';
+			}
         }
         
         parent::onSubmit();
@@ -176,13 +186,13 @@ class page_action extends tform_actions {
 	function onAfterInsert() {
 		global $app, $conf;
 		
-        $web = $app->db->queryOneRecord("SELECT * FROM web_domain WHERE domain_id = ".intval($this->dataRecord["parent_domain_id"]));
+        $web = $app->db->queryOneRecord("SELECT * FROM web_domain WHERE domain_id = ".$app->functions->intval($this->dataRecord["parent_domain_id"]));
         $server_id = $web["server_id"];
         
         // The cron shall be owned by the same group then the website
         $sys_groupid = $web['sys_groupid'];
         
-        $sql = "UPDATE shell_user SET server_id = $server_id, sys_groupid = '$sys_groupid' WHERE id = ".$this->id;
+        $sql = "UPDATE cron SET server_id = $server_id, sys_groupid = '$sys_groupid' WHERE id = ".$this->id;
         $app->db->query($sql);
 	}
 	
@@ -191,27 +201,6 @@ class page_action extends tform_actions {
 		
 		
 	}
-    
-    function getClientName() {
-        global $app, $conf;
-    
-        if($_SESSION["s"]["user"]["typ"] != 'admin') {
-            // Get the group-id of the user
-            $client_group_id = $_SESSION["s"]["user"]["default_group"];
-        } else {
-            // Get the group-id from the data itself
-            $web = $app->db->queryOneRecord("SELECT sys_groupid FROM web_domain WHERE domain_id = ".intval($this->dataRecord['parent_domain_id']));
-            $client_group_id = $web['sys_groupid'];
-        }
-        /* get the name of the client */
-        $tmp = $app->db->queryOneRecord("SELECT name FROM sys_group WHERE groupid = " . $client_group_id);
-        $clientName = $tmp['name'];
-        if ($clientName == "") $clientName = 'default';
-        $clientName = convertClientName($clientName);
-        
-        return $clientName;
-    
-    }
 	
 }
 

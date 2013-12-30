@@ -177,7 +177,7 @@ class searchform {
 
         $sql_von = $_SESSION['search'][$list_name]['page'] * $records_per_page;
         $record_count = $app->db->queryOneRecord("SELECT count(*) AS anzahl FROM $table WHERE $sql_where");
-        $pages = intval(($record_count['anzahl'] - 1) / $records_per_page);
+        $pages = $app->functions->intval(($record_count['anzahl'] - 1) / $records_per_page);
 
         $vars['list_file']      = $this->listDef['file'];
         $vars['page']           = $_SESSION['search'][$list_name]['page'];
@@ -208,6 +208,8 @@ class searchform {
         $content .= ' '.$app->lng('Page').' '.$vars['next_page'].' '.$app->lng('of').' '.$vars['max_pages'].' ';
         if($vars['show_page_next'] == 1){
             $content .= '<a href="'.$list_file.'?page='.$vars['next_page'].$page_params.'"><img src="../themes/iprg/images/btn_next.png" border="0"></a> &nbsp; ';
+        } else{
+            $content .= '&nbsp;';
         }
         $content .= '<a href="'.$list_file.'?page='.$vars['pages'].$page_params.'"> <img src="../themes/iprg/images/btn_right.png" border="0"></a>';
         return $content;
@@ -244,7 +246,7 @@ class searchform {
 		$list_name = $this->listDef['name'];
 		$settings = $_SESSION['search'][$list_name];
 		unset($settings['page']);
-		$data = mysql_real_escape_string(serialize($settings));
+		$data = $app->db->quote(serialize($settings));
 		
 		$userid = $_SESSION['s']['user']['userid'];
 		$groupid = $_SESSION['s']['user']['default_group'];
@@ -264,6 +266,7 @@ class searchform {
 
     public function decode($record)
     {
+        global $app;
         if(is_array($record)) {
             foreach($this->listDef['item'] as $field) {
                 $key = $field['field'];
@@ -276,7 +279,7 @@ class searchform {
                         break;
     
                     case 'INTEGER':
-                        $record[$key] = intval($record[$key]);
+                        $record[$key] = $app->functions->intval($record[$key]);
                         break;
     
                     case 'DOUBLE':
@@ -301,6 +304,7 @@ class searchform {
 
     public function encode($record)
     {
+	global $app;
         if(is_array($record)) {
             foreach($this->listDef['item'] as $field) {
                 $key = $field['field'];
@@ -309,7 +313,7 @@ class searchform {
                     case 'VARCHAR':
                     case 'TEXT':
                         if(!is_array($record[$key])) {
-                            $record[$key] = mysql_real_escape_string($record[$key]);
+                            $record[$key] = $app->db->quote($record[$key]);
                         } else {
                             $record[$key] = implode($this->tableDef[$key]['separator'],$record[$key]);
                         }
@@ -323,11 +327,11 @@ class searchform {
                         break;
 
                     case 'INTEGER':
-                        $record[$key] = intval($record[$key]);
+                        $record[$key] = $app->functions->intval($record[$key]);
                         break;
 
                     case 'DOUBLE':
-                        $record[$key] = mysql_real_escape_string($record[$key]);
+                        $record[$key] = $app->db->quote($record[$key]);
                         break;
 
                     case 'CURRENCY':

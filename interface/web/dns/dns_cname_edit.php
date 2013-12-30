@@ -76,7 +76,7 @@ class page_action extends tform_actions {
 		global $app, $conf;
 		
 		// Get the parent soa record of the domain
-		$soa = $app->db->queryOneRecord("SELECT * FROM dns_soa WHERE id = '".intval($_POST["zone"])."' AND ".$app->tform->getAuthSQL('r'));
+		$soa = $app->db->queryOneRecord("SELECT * FROM dns_soa WHERE id = '".$app->functions->intval($_POST["zone"])."' AND ".$app->tform->getAuthSQL('r'));
 
 		// Check if Domain belongs to user
 		if($soa["id"] != $_POST["zone"]) $app->tform->errorMessage .= $app->tform->wordbook["no_zone_perm"];
@@ -96,6 +96,11 @@ class page_action extends tform_actions {
 			}
 		} // end if user is not admin
 		
+		//* Check for duplicates where IP and hostname are the same
+		$tmp = $app->db->queryOneRecord("SELECT count(id) as number FROM dns_rr WHERE (type = 'A' AND name = '".$this->dataRecord["name"]."' AND zone = '".$this->dataRecord["zone"]."' and id != ".$this->id.") OR (type = 'CNAME' AND name = '".$this->dataRecord["name"]."' AND zone = '".$this->dataRecord["zone"]."' and id != ".$this->id.")");
+		if($tmp['number'] > 0) $app->tform->errorMessage .= $app->tform->lng("data_error_duplicate")."<br>";
+		unset($tmp);
+		
 		
 		// Set the server ID of the rr record to the same server ID as the parent record.
 		$this->dataRecord["server_id"] = $soa["server_id"];
@@ -112,11 +117,11 @@ class page_action extends tform_actions {
 		global $app, $conf;
 		
 		//* Set the sys_groupid of the rr record to be the same then the sys_groupid of the soa record
-		$soa = $app->db->queryOneRecord("SELECT sys_groupid,serial FROM dns_soa WHERE id = '".intval($this->dataRecord["zone"])."' AND ".$app->tform->getAuthSQL('r'));
+		$soa = $app->db->queryOneRecord("SELECT sys_groupid,serial FROM dns_soa WHERE id = '".$app->functions->intval($this->dataRecord["zone"])."' AND ".$app->tform->getAuthSQL('r'));
 		$app->db->datalogUpdate('dns_rr', "sys_groupid = ".$soa['sys_groupid'], 'id', $this->id);
 
 		//* Update the serial number of the SOA record
-		$soa_id = intval($_POST["zone"]);
+		$soa_id = $app->functions->intval($_POST["zone"]);
 		$serial = $app->validate_dns->increase_serial($soa["serial"]);
 		$app->db->datalogUpdate('dns_soa', "serial = $serial", 'id', $soa_id);
 	}
@@ -125,8 +130,8 @@ class page_action extends tform_actions {
 		global $app, $conf;
 		
 		//* Update the serial number of the SOA record
-		$soa = $app->db->queryOneRecord("SELECT serial FROM dns_soa WHERE id = '".intval($this->dataRecord["zone"])."' AND ".$app->tform->getAuthSQL('r'));
-		$soa_id = intval($_POST["zone"]);
+		$soa = $app->db->queryOneRecord("SELECT serial FROM dns_soa WHERE id = '".$app->functions->intval($this->dataRecord["zone"])."' AND ".$app->tform->getAuthSQL('r'));
+		$soa_id = $app->functions->intval($_POST["zone"]);
 		$serial = $app->validate_dns->increase_serial($soa["serial"]);
 		$app->db->datalogUpdate('dns_soa', "serial = $serial", 'id', $soa_id);
 	}

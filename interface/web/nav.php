@@ -35,22 +35,33 @@ $app->uses('tpl');
 
 //** Top Naviation
 if(isset($_GET['nav']) && $_GET['nav'] == 'top') {
-	
+
 	$app->tpl->newTemplate('topnav.tpl.htm');
-	
+
 	//* Check User Login and current module
 	if(isset($_SESSION["s"]["user"]) && $_SESSION["s"]["user"]['active'] == 1 && is_array($_SESSION['s']['module'])) {
 		//* Loading modules of the user and building top navigation
 		$modules = explode(',', $_SESSION['s']['user']['modules']);
+		/*
+		 * If the dashboard is in the list of modules it always has to be the first!
+		 */
+		asort($modules);
+		if (in_array('dashboard', $modules)) {
+			$key = array_search('dashboard', $modules);
+			unset($modules[$key]);
+			$modules = array_merge(array('dashboard'), $modules);
+		}
 		if(is_array($modules)) {
 			foreach($modules as $mt) {
 				if(is_file($mt.'/lib/module.conf.php')) {
 					if(!preg_match("/^[a-z]{2,20}$/i", $mt)) die('module name contains unallowed chars.');
 					include_once($mt.'/lib/module.conf.php');
+					$language = (isset($_SESSION['s']['user']['language']))?$_SESSION['s']['user']['language']:$conf['language'];
+					$app->load_language_file('web/'.$mt.'/lib/'.$language.'.lng');
 					$active = ($module['name'] == $_SESSION['s']['module']['name']) ? 1 : 0;
 					$topnav[] = array(	'title' 	=> $app->lng($module['title']),
-					  				    'active' 	=> $active,
-									    'module'	=> $module['name']);
+							'active' 	=> $active,
+							'module'	=> $module['name']);
 				}
 			}
 		}
@@ -59,41 +70,46 @@ if(isset($_GET['nav']) && $_GET['nav'] == 'top') {
 		include_once('login/lib/module.conf.php');
 		$_SESSION['s']['module'] = $module;
 		$topnav[] = array(	'title' 	=> 'Login',
-				  			'active' 	=> 1);
+				'active' 	=> 1);
 		$module = null;
 		unset($module);
 	}
 
 	//* Topnavigation
 	$app->tpl->setLoop('nav_top',$topnav);
-	
+
 }
 
 //** Side Naviation
 if(isset($_GET['nav']) && $_GET['nav'] == 'side') {
-	
-	$app->tpl->newTemplate('sidenav.tpl.htm');
-	
-	//* translating module navigation
-	$nav_translated = array();
-	if(isset($_SESSION['s']['module']['nav']) && is_array($_SESSION['s']['module']['nav'])) {
-		foreach($_SESSION['s']['module']['nav'] as $nav) {
-			$tmp_items = array();
-			foreach($nav['items'] as $item) {
-				$item['title'] = $app->lng($item['title']);
-				$tmp_items[] = $item;
-			}
-			$nav['title'] = $app->lng($nav['title']);
-			$nav['startpage'] = $nav['items'][0]['link'];
-			$nav['items'] = $tmp_items;
-			$nav_translated[] = $nav;
-		}
+
+	if(isset($_SESSION['s']['module']['name']) && is_file($_SESSION['s']['module']['name'].'/lib/custom_menu.inc.php')) {
+		include_once($_SESSION['s']['module']['name'].'/lib/custom_menu.inc.php');
 	} else {
-		$nav_translated = null;
+	
+		$app->tpl->newTemplate('sidenav.tpl.htm');
+
+		//* translating module navigation
+		$nav_translated = array();
+		if(isset($_SESSION['s']['module']['nav']) && is_array($_SESSION['s']['module']['nav'])) {
+			foreach($_SESSION['s']['module']['nav'] as $nav) {
+				$tmp_items = array();
+				foreach($nav['items'] as $item) {
+					$item['title'] = $app->lng($item['title']);
+					$tmp_items[] = $item;
+				}
+				$nav['title'] = $app->lng($nav['title']);
+				$nav['startpage'] = $nav['items'][0]['link'];
+				$nav['items'] = $tmp_items;
+				$nav_translated[] = $nav;
+			}
+		} else {
+			$nav_translated = null;
+		}
+		$app->tpl->setLoop('nav_left',$nav_translated);
+	
 	}
 
-	$app->tpl->setLoop('nav_left',$nav_translated);
-	
 }
 
 $app->tpl_defaults();

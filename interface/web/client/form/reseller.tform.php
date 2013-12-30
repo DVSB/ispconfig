@@ -29,6 +29,11 @@
 	Hint:
 	The ID field of the database table is not part of the datafield definition.
 	The ID field must be always auto incement (int or bigint).
+	
+	Search:
+	- searchable = 1 or searchable = 2 include the field in the search
+	- searchable = 1: this field will be the title of the search result
+	- searchable = 2: this field will be included in the description of the search result
 
 
 */
@@ -49,6 +54,19 @@ $form["auth_preset"]["groupid"] = 0; // 0 = default groupid of the user, > 0 id 
 $form["auth_preset"]["perm_user"] = 'riud'; //r = read, i = insert, u = update, d = delete
 $form["auth_preset"]["perm_group"] = 'riud'; //r = read, i = insert, u = update, d = delete
 $form["auth_preset"]["perm_other"] = ''; //r = read, i = insert, u = update, d = delete
+
+//* Load themes
+$themes_list = array();
+$handle = @opendir(ISPC_THEMES_PATH);
+while ($file = @readdir ($handle)) {
+    if (substr($file, 0, 1) != '.') {
+        if(@is_dir(ISPC_THEMES_PATH."/$file")) {
+			if(!file_exists(ISPC_THEMES_PATH."/$file/ispconfig_version") || (@file_exists(ISPC_THEMES_PATH."/$file/ispconfig_version") && trim(@file_get_contents(ISPC_THEMES_PATH."/$file/ispconfig_version")) == ISPC_APP_VERSION)) {
+                $themes_list[$file] = $file;
+            }
+        }
+    }
+}
 
 //* Languages
 $language_list = array();
@@ -79,7 +97,14 @@ $form["tabs"]['address'] = array (
 			'width'		=> '30',
 			'maxlength'	=> '255',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 2
+		),
+		'gender' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'SELECT',
+			'default'	=> '',
+			'value'		=> array('' => '', 'm' => 'gender_m_txt', 'f' => 'gender_f_txt')
 		),
 		'contact_name' => array (
 			'datatype'	=> 'VARCHAR',
@@ -93,7 +118,24 @@ $form["tabs"]['address'] = array (
 			'width'		=> '30',
 			'maxlength'	=> '255',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 1
+		),
+		'customer_no' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'TEXT',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'UNIQUE',
+														'errmsg'=> 'customer_no_error_unique',
+														'allowempty' => 'y'),
+									),
+			'default'	=> '',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '30',
+			'maxlength'	=> '255',
+			'rows'		=> '',
+			'cols'		=> '',
+			'searchable' => 2
 		),
 		'username' => array (
 			'datatype'	=> 'VARCHAR',
@@ -104,7 +146,11 @@ $form["tabs"]['address'] = array (
 														'class' => 'validate_client',
 														'function' => 'username_unique',
 														'errmsg'=> 'username_error_unique'),
-										2 => array (	'type'	=> 'REGEX',
+										2 => array (	'type'	=> 'CUSTOM',
+														'class' => 'validate_client',
+														'function' => 'username_collision',
+														'errmsg'=> 'username_error_collision'),
+										3 => array (	'type'	=> 'REGEX',
 														'regex' => '/^[\w\.\-\_]{0,64}$/',
 														'errmsg'=> 'username_error_regex'),
 										),
@@ -114,7 +160,8 @@ $form["tabs"]['address'] = array (
 			'width'		=> '30',
 			'maxlength'	=> '255',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 2
 		),
 		'password' => array (
 			'datatype'	=> 'VARCHAR',
@@ -142,8 +189,8 @@ $form["tabs"]['address'] = array (
 		'usertheme' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'SELECT',
-			'default'	=> 'default',
-			'value'		=> array('default' => 'default'),
+			'default'	=> $conf["theme"],
+			'value'		=> $themes_list,
 			'separator'	=> '',
 			'width'		=> '30',
 			'maxlength'	=> '255',
@@ -159,7 +206,8 @@ $form["tabs"]['address'] = array (
 			'width'		=> '30',
 			'maxlength'	=> '255',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 2
 		),
 		'zip' => array (
 			'datatype'	=> 'VARCHAR',
@@ -170,7 +218,8 @@ $form["tabs"]['address'] = array (
 			'width'		=> '10',
 			'maxlength'	=> '255',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 2
 		),
 		'city' => array (
 			'datatype'	=> 'VARCHAR',
@@ -181,7 +230,8 @@ $form["tabs"]['address'] = array (
 			'width'		=> '30',
 			'maxlength'	=> '255',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 2
 		),
 		'state' => array (
 			'datatype'	=> 'VARCHAR',
@@ -192,13 +242,14 @@ $form["tabs"]['address'] = array (
 			'width'		=> '30',
 			'maxlength'	=> '255',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 2
 		),
 		'country' => array (
 			'datatype'	=> 'VARCHAR',
 
 			'formtype'	=> 'SELECT',
-			'default'	=> 'DE',
+			'default'	=> (isset($conf['language']) ? strtoupper($conf['language']) : ''),
 			'datasource'	=> array ( 	'type'	=> 'SQL',
 										'querystring' => 'SELECT iso,printable_name FROM country ORDER BY printable_name',
 										'keyfield'=> 'iso',
@@ -215,7 +266,8 @@ $form["tabs"]['address'] = array (
 			'width'		=> '30',
 			'maxlength'	=> '255',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 2
 		),
 		'mobile' => array (
 			'datatype'	=> 'VARCHAR',
@@ -226,7 +278,8 @@ $form["tabs"]['address'] = array (
 			'width'		=> '30',
 			'maxlength'	=> '255',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 2
 		),
 		'fax' => array (
 			'datatype'	=> 'VARCHAR',
@@ -237,18 +290,27 @@ $form["tabs"]['address'] = array (
 			'width'		=> '30',
 			'maxlength'	=> '255',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 2
 		),
 		'email' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
+            'filters'   => array( 0 => array( 'event' => 'SAVE',
+                                              'type' => 'IDNTOASCII'),
+                                  1 => array( 'event' => 'SHOW',
+                                              'type' => 'IDNTOUTF8'),
+                                  2 => array( 'event' => 'SAVE',
+                                              'type' => 'TOLOWER')
+                                ),
 			'default'	=> '',
 			'value'		=> '',
 			'separator'	=> '',
 			'width'		=> '30',
 			'maxlength'	=> '255',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 2
 		),
 		'internet' => array (
 			'datatype'	=> 'VARCHAR',
@@ -259,9 +321,98 @@ $form["tabs"]['address'] = array (
 			'width'		=> '30',
 			'maxlength'	=> '255',
 			'rows'		=> '',
-			'cols'		=> ''
+			'cols'		=> '',
+			'searchable' => 2
 		),
 		'icq' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'TEXT',
+			'default'	=> '',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '30',
+			'maxlength'	=> '255',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'vat_id' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'TEXT',
+			'default'	=> '',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '30',
+			'maxlength'	=> '255',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'company_id' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'TEXT',
+			'default'	=> '',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '30',
+			'maxlength'	=> '20',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'bank_account_owner' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'TEXT',
+			'default'	=> '',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '30',
+			'maxlength'	=> '255',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'bank_account_number' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'TEXT',
+			'default'	=> '',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '30',
+			'maxlength'	=> '255',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'bank_code' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'TEXT',
+			'default'	=> '',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '30',
+			'maxlength'	=> '255',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'bank_name' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'TEXT',
+			'default'	=> '',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '30',
+			'maxlength'	=> '255',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'bank_account_iban' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'TEXT',
+			'default'	=> '',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '30',
+			'maxlength'	=> '255',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'bank_account_swift' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
 			'default'	=> '',
@@ -282,6 +433,41 @@ $form["tabs"]['address'] = array (
 			'maxlength'	=> '',
 			'rows'		=> '10',
 			'cols'		=> '30'
+		),
+		'paypal_email' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'TEXT',
+            'filters'   => array( 0 => array( 'event' => 'SAVE',
+                                              'type' => 'IDNTOASCII'),
+                                  1 => array( 'event' => 'SHOW',
+                                              'type' => 'IDNTOUTF8'),
+                                  2 => array( 'event' => 'SAVE',
+                                              'type' => 'TOLOWER')
+                                ),
+			'validators'	=> array ( 	0 => array (	'type'	=> 'REGEX',
+														'regex' => '/^(\w+[\w\.\-\+]*\w{0,}@\w+[\w.-]*\.[a-z\-]{2,10}){0,1}$/i',
+														'errmsg'=> 'paypal_email_error_isemail'),
+									),
+			'default'	=> '',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '30',
+			'maxlength'	=> '255',
+			'rows'		=> '',
+			'cols'		=> '',
+			'searchable' => 2
+		),
+		'locked' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'canceled' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
 		),
 	##################################
 	# END Datatable fields
@@ -336,6 +522,20 @@ $form["tabs"]['limits'] = array (
 			'rows'		=> '',
 			'cols'		=> ''
 		),
+		'limit_mailmailinglist' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'TEXT',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
+														'errmsg'=> 'limit_mailmailinglist_error_notint'),
+									),
+			'default'	=> '-1',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '10',
+			'maxlength'	=> '10',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
 		'limit_mailbox' => array (
 			'datatype'	=> 'INTEGER',
 			'formtype'	=> 'TEXT',
@@ -355,6 +555,20 @@ $form["tabs"]['limits'] = array (
 			'formtype'	=> 'TEXT',
 			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
 														'errmsg'=> 'limit_mailalias_error_notint'),
+									),
+			'default'	=> '-1',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '10',
+			'maxlength'	=> '10',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'limit_mailaliasdomain' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'TEXT',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
+														'errmsg'=> 'limit_mailaliasdomain_error_notint'),
 									),
 			'default'	=> '-1',
 			'value'		=> '',
@@ -532,9 +746,66 @@ $form["tabs"]['limits'] = array (
 		'web_php_options' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'CHECKBOXARRAY',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'NOTEMPTY',
+														'errmsg'=> 'web_php_options_notempty'),
+									),
 			'default'	=> '',
 			'separator' => ',',
-			'value'		=> array('no' => 'Disabled', 'fast-cgi' => 'Fast-CGI', 'cgi' => 'CGI', 'mod' => 'Mod-PHP', 'suphp' => 'SuPHP')
+			'value'		=> array('no' => 'Disabled', 'fast-cgi' => 'Fast-CGI', 'cgi' => 'CGI', 'mod' => 'Mod-PHP', 'suphp' => 'SuPHP', 'php-fpm' => 'PHP-FPM')
+		),
+		'limit_cgi' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_ssi' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_perl' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_ruby' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_python' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'force_suexec' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'y',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_hterror' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_wildcard' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
+		),
+		'limit_ssl' => array (
+			'datatype'	=> 'VARCHAR',
+			'formtype'	=> 'CHECKBOX',
+			'default'	=> 'n',
+			'value'		=> array(0 => 'n',1 => 'y')
 		),
 		'limit_web_aliasdomain' => array (
 			'datatype'	=> 'INTEGER',
@@ -595,9 +866,26 @@ $form["tabs"]['limits'] = array (
 		'ssh_chroot' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'CHECKBOXARRAY',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'NOTEMPTY',
+														'errmsg'=> 'ssh_chroot_notempty'),
+									),
 			'default'	=> '',
 			'separator' => ',',
 			'value'		=> array('no' => 'None', 'jailkit' => 'Jailkit')
+		),
+		'limit_webdav_user' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'TEXT',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
+														'errmsg'=> 'limit_webdav_user_error_notint'),
+									),
+			'default'	=> '-1',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '10',
+			'maxlength'	=> '10',
+			'rows'		=> '',
+			'cols'		=> ''
 		),
 		'default_dnsserver' => array (
 			'datatype'	=> 'INTEGER',
@@ -624,6 +912,31 @@ $form["tabs"]['limits'] = array (
 			'rows'		=> '',
 			'cols'		=> ''
 		),
+		'default_slave_dnsserver' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'SELECT',
+			'default'	=> '1',
+			'datasource'	=> array ( 	'type'	=> 'SQL',
+										'querystring' => 'SELECT server_id,server_name FROM server WHERE dns_server = 1 AND {AUTHSQL} ORDER BY server_name',
+										'keyfield'=> 'server_id',
+										'valuefield'=> 'server_name'
+									 ),
+			'value'		=> ''
+		),
+                'limit_dns_slave_zone' => array (
+                        'datatype'      => 'INTEGER',
+                        'formtype'      => 'TEXT',
+                        'validators'    => array (      0 => array (    'type'  => 'ISINT',
+                                                                                                                'errmsg'=> 'limit_dns_slave_zone_error_notint'),
+                                                                        ),
+                        'default'       => '-1',
+                        'value'         => '',
+                        'separator'     => '',
+                        'width'         => '10',
+                        'maxlength'     => '10',
+                        'rows'          => '',
+                        'cols'          => ''
+                ),
 		'limit_dns_record' => array (
 			'datatype'	=> 'INTEGER',
 			'formtype'	=> 'TEXT',
@@ -719,6 +1032,45 @@ $form["tabs"]['limits'] = array (
 			'formtype'	=> 'TEXT',
 			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
 														'errmsg'=> 'limit_traffic_quota_error_notint'),
+									),
+			'default'	=> '-1',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '10',
+			'maxlength'	=> '10',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'limit_openvz_vm' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'TEXT',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
+														'errmsg'=> 'limit_openvz_vm_error_notint'),
+									),
+			'default'	=> '0',
+			'value'		=> '',
+			'separator'	=> '',
+			'width'		=> '10',
+			'maxlength'	=> '10',
+			'rows'		=> '',
+			'cols'		=> ''
+		),
+		'limit_openvz_vm_template_id' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'SELECT',
+			'default'	=> '',
+			'datasource'	=> array ( 	'type'	=> 'SQL',
+										'querystring' => 'SELECT template_id,template_name FROM openvz_template WHERE 1 ORDER BY template_name',
+										'keyfield'=> 'template_id',
+										'valuefield'=> 'template_name'
+									 ),
+			'value'		=> array(0 => ' ')
+		),
+		'limit_aps' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'TEXT',
+			'validators'	=> array ( 	0 => array (	'type'	=> 'ISINT',
+														'errmsg'=> 'limit_aps_error_notint'),
 									),
 			'default'	=> '-1',
 			'value'		=> '',

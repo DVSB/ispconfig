@@ -8,8 +8,6 @@ Installation of some basic requirements:
 
 // rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY*
 yum update
-// yum groupinstall 'Development Tools'
-// yum groupinstall 'Development Libraries'
 
 You should disable selinux now, as some programs will not start when selinux is enabled:
 
@@ -22,7 +20,7 @@ SELINUX=disabled
 then reboot the server.
 
 
-1) Install Postfix, Courier, Saslauthd, MySQL, phpMyAdmin with the following command line (on one line!):
+1) Install Postfix, Dovecot MySQL, phpMyAdmin with the following command line (on one line!):
 
 yum install ntp httpd mysql-server php php-mysql php-mbstring phpMyAdmin getmail postfix dovecot dovecot-mysql wget
 
@@ -39,7 +37,6 @@ chkconfig --levels 235 sendmail off
 chkconfig --levels 235 postfix on
 /etc/init.d/sendmail stop
 /etc/init.d/postfix start
-/etc/init.d/saslauthd start
 
 
 Set the mysql database password:
@@ -59,7 +56,7 @@ chkconfig --levels 235 clamd.amavisd on
 
 3) Install apache, PHP5 and phpmyadmin (1 line!):
 
-yum install php php-devel php-gd php-imap php-ldap php-mysql php-odbc php-pear php-xml php-xmlrpc php-eaccelerator php-magickwand php-magpierss php-mapserver php-mbstring php-mcrypt php-mhash php-mssql php-shout php-snmp php-soap php-tidy curl curl-devel perl-libwww-perl ImageMagick libxml2 libxml2-devel phpmyadmin
+yum install php php-devel php-gd php-imap php-ldap php-mysql php-odbc php-pear php-xml php-xmlrpc php-magickwand php-magpierss php-mapserver php-mbstring php-mcrypt php-mhash php-mssql php-shout php-snmp php-soap php-tidy curl curl-devel perl-libwww-perl ImageMagick libxml2 libxml2-devel phpmyadmin
 
 disable php mapserver module as it causes errors on cli:
 
@@ -114,7 +111,7 @@ ISPConfig comes with a iptables bsed firewall script that can be managed from wi
 8) Install ISPConfig 3
 
   cd /tmp
-  wget http://www.ispconfig.org/downloads/ISPConfig-3.0.2.tar.gz
+  wget http://www.ispconfig.org/downloads/ISPConfig-3.0.2.1.tar.gz
   tar xvfz ISPConfig-3.0.2.tar.gz
   cd ispconfig3_install/install/
 
@@ -122,7 +119,7 @@ Now start the installation process by executing:
 
 php -q install.php
 
-The installer will configure all services like postfix, sasl, courier, etc. for you. A manual setup as required for ISPConfig 2 (perfect setup guides) is not nescessary. To login to the ISPConfig controlpanel, open the following URL in your browser (replace the IP to match your settings!):
+The installer will configure all services like postfix, sasl, courier, etc. for you. A manual setup as required for ISPConfig 2 (perfect setup guides) is not necessary. To login to the ISPConfig controlpanel, open the following URL in your browser (replace the IP to match your settings!):
 
 http://192.168.0.100:8080/
 

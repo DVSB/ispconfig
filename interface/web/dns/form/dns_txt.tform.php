@@ -32,6 +32,7 @@
 
 
 */
+global $app;
 
 $form["title"] 			= "DNS TXT Record";
 $form["description"] 	= "";
@@ -69,7 +70,7 @@ $form["tabs"]['dns'] = array (
 		'zone' => array (
 			'datatype'	=> 'INTEGER',
 			'formtype'	=> 'TEXT',
-			'default'	=> @intval($_REQUEST["zone"]),
+			'default'	=> @$app->functions->intval($_REQUEST["zone"]),
 			'value'		=> '',
 			'width'		=> '30',
 			'maxlength'	=> '255'
@@ -77,8 +78,15 @@ $form["tabs"]['dns'] = array (
 		'name' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
+            'filters'   => array( 0 => array( 'event' => 'SAVE',
+                                              'type' => 'IDNTOASCII'),
+                                  1 => array( 'event' => 'SHOW',
+                                              'type' => 'IDNTOUTF8'),
+                                  2 => array( 'event' => 'SAVE',
+                                              'type' => 'TOLOWER')
+                                ),
 			'validators'	=> array ( 	0 => array (	'type'	=> 'REGEX',
-														'regex' => '/^[\w\.\-]{0,64}$/',
+														'regex' => '/^[\w\.\-]{0,255}$/',
 														'errmsg'=> 'name_error_regex'),
 									),
 			'default'	=> '',

@@ -45,6 +45,7 @@ protocols = imap imaps pop3 pop3s
 #     ..
 #   }
 #listen = *
+listen = *,[::]
 
 # Disable LOGIN command and all other plaintext authentications unless
 # SSL/TLS is used (LOGINDISABLED capability). Note that if the remote IP
@@ -98,6 +99,9 @@ log_timestamp = "%Y-%m-%d %H:%M:%S "
 # root.
 #ssl_cert_file = /etc/ssl/certs/dovecot.pem
 #ssl_key_file = /etc/ssl/private/dovecot.pem
+
+ssl_cert_file = /etc/postfix/smtpd.cert
+ssl_key_file = /etc/postfix/smtpd.key
 
 # If key file is password protected, give the password here. Alternatively
 # give it when starting dovecot with -p parameter.
@@ -847,7 +851,7 @@ auth default {
   # database (passwd usually), you can use static userdb.
   # REMEMBER: You'll need /etc/pam.d/dovecot file created for PAM
   # authentication to actually work. <doc/wiki/PasswordDatabase.PAM.txt>
-  passdb pam {
+  # passdb pam {
     # [blocking=yes] [session=yes] [setcred=yes]
     # [cache_key=<key>] [<service name>]
     #
@@ -880,7 +884,7 @@ auth default {
     #   args = session=yes *
     #   args = cache_key=%u dovecot
     #args = dovecot
-  }
+  # }
 
   # System users (NSS, /etc/passwd, or similiar)
   # In many systems nowadays this uses Name Service Switch, which is

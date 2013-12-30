@@ -16,6 +16,6 @@ $wb['run_hour_error_format'] = 'Nieprawidłowy format godzin.';
 $wb['run_mday_error_format'] = 'Niepoprawny format dni w miesiącu.';
 $wb['run_month_error_format'] = 'Niepoprawny format miesięcy.';
 $wb['run_wday_error_format'] = 'Niepoprawny format dni w tygodniu.';
-$wb['command_error_format'] = 'Niepoprawny format komendy. Proszę zanotuj że w zbiorze url może być tylko adres http/https który ma pozwolenie.';
+$wb['command_error_format'] = 'Niepoprawny format polecenia. W zbiorze url może być tylko adres http/https który ma pozwolenie.';
 $wb['unknown_fieldtype_error'] = 'Został użyty niepoprawny format pola.';
 ?>

@@ -73,13 +73,16 @@ class page_action extends tform_actions {
 		$email = $this->dataRecord["email"];
 		$email_parts = explode("@",$email);
 		$app->tpl->setVar("email_local_part",$email_parts[0]);
-		
+		$email_parts[1] = $app->functions->idn_decode($email_parts[1]);
+        
 		// Getting Domains of the user
-		$sql = "SELECT domain FROM mail_domain WHERE ".$app->tform->getAuthSQL('r').' ORDER BY domain';
+		// $sql = "SELECT domain, server_id FROM mail_domain WHERE ".$app->tform->getAuthSQL('r').' ORDER BY domain';
+		$sql = "SELECT domain, server_id FROM mail_domain WHERE domain NOT IN (SELECT SUBSTR(source,2) FROM mail_forwarding WHERE type = 'aliasdomain') AND ".$app->tform->getAuthSQL('r')." ORDER BY domain";
 		$domains = $app->db->queryAllRecords($sql);
 		$domain_select = '';
 		if(is_array($domains)) {
 			foreach( $domains as $domain) {
+                $domain['domain'] = $app->functions->idn_decode($domain['domain']);
 				$selected = ($domain["domain"] == @$email_parts[1])?'SELECTED':'';
 				$domain_select .= "<option value='$domain[domain]' $selected>$domain[domain]</option>\r\n";
 			}
@@ -108,10 +111,24 @@ class page_action extends tform_actions {
 		if($this->dataRecord["quota"] != -1) $app->tpl->setVar("quota",$this->dataRecord["quota"] / 1024 / 1024);
 		
 		// Is autoresponder set?
-		if ($this->dataRecord['autoresponder'] == 'y') {
+		if (!empty($this->dataRecord['autoresponder']) && $this->dataRecord['autoresponder'] == 'y') {
 			$app->tpl->setVar("ar_active", 'checked="checked"');
 		} else {
 			$app->tpl->setVar("ar_active", '');
+		}
+		
+		if($this->dataRecord['autoresponder_subject'] == '') {
+			$app->tpl->setVar('autoresponder_subject', $app->tform->lng('autoresponder_subject'));
+		} else {
+			$app->tpl->setVar('autoresponder_subject', $this->dataRecord['autoresponder_subject']);
+		}
+		
+    $app->uses('getconf');
+    $mail_config = $app->getconf->get_global_config('mail');
+		if($mail_config["enable_custom_login"] == "y") {
+		    $app->tpl->setVar("enable_custom_login", 1);
+		} else {
+		    $app->tpl->setVar("enable_custom_login", 0);
 		}
 		
 		parent::onShowEnd();
@@ -122,8 +139,8 @@ class page_action extends tform_actions {
 		
 		//* Check if Domain belongs to user
 		if(isset($_POST["email_domain"])) {
-			$domain = $app->db->queryOneRecord("SELECT server_id, domain FROM mail_domain WHERE domain = '".$app->db->quote($_POST["email_domain"])."' AND ".$app->tform->getAuthSQL('r'));
-			if($domain["domain"] != $_POST["email_domain"]) $app->tform->errorMessage .= $app->tform->lng("no_domain_perm");
+			$domain = $app->db->queryOneRecord("SELECT server_id, domain FROM mail_domain WHERE domain = '".$app->db->quote($app->functions->idn_encode($_POST["email_domain"]))."' AND ".$app->tform->getAuthSQL('r'));
+			if($domain["domain"] != $app->functions->idn_encode($_POST["email_domain"])) $app->tform->errorMessage .= $app->tform->lng("no_domain_perm");
 		}
 		
 		
@@ -149,10 +166,10 @@ class page_action extends tform_actions {
 			}
 			
 			// Check the quota and adjust
-			if(isset($_POST["quota"]) && $client["limit_mailquota"] >= 0) {
-				$tmp = $app->db->queryOneRecord("SELECT sum(quota) as mailquota FROM mail_user WHERE mailuser_id != ".intval($this->id)." AND ".$app->tform->getAuthSQL('u'));
+			if(isset($_POST["quota"]) && $client["limit_mailquota"] >= 0 && $app->functions->intval($this->dataRecord["quota"]) * 1024 * 1024 != $this->oldDataRecord['quota']) {
+				$tmp = $app->db->queryOneRecord("SELECT sum(quota) as mailquota FROM mail_user WHERE mailuser_id != ".$app->functions->intval($this->id)." AND ".$app->tform->getAuthSQL('u'));
 				$mailquota = $tmp["mailquota"] / 1024 / 1024;
-				$new_mailbox_quota = intval($this->dataRecord["quota"]);
+				$new_mailbox_quota = $app->functions->intval($this->dataRecord["quota"]);
 				if(($mailquota + $new_mailbox_quota > $client["limit_mailquota"]) || ($new_mailbox_quota == 0 && $client["limit_mailquota"] != -1)) {
 					$max_free_quota = $client["limit_mailquota"] - $mailquota;
 					$app->tform->errorMessage .= $app->tform->lng("limit_mailquota_txt").": ".$max_free_quota."<br>";
@@ -165,9 +182,12 @@ class page_action extends tform_actions {
 		} // end if user is not admin
 		
 
+    $app->uses('getconf');
+    $mail_config = $app->getconf->get_server_config(!empty($domain["server_id"]) ? $domain["server_id"] : '','mail');
+		
 		//* compose the email field
 		if(isset($_POST["email_local_part"]) && isset($_POST["email_domain"])) {
-			$this->dataRecord["email"] = strtolower($_POST["email_local_part"]."@".$_POST["email_domain"]);
+			$this->dataRecord["email"] = strtolower($_POST["email_local_part"]."@".$app->functions->idn_encode($_POST["email_domain"]));
 		
 			// Set the server id of the mailbox = server ID of mail domain.
 			$this->dataRecord["server_id"] = $domain["server_id"];
@@ -179,8 +199,6 @@ class page_action extends tform_actions {
 			if($this->dataRecord["quota"] != -1) $this->dataRecord["quota"] = $this->dataRecord["quota"] * 1024 * 1024;
 		
 			// setting Maildir, Homedir, UID and GID
-			$app->uses('getconf');
-			$mail_config = $app->getconf->get_server_config($domain["server_id"],'mail');
 			$maildir = str_replace("[domain]",$domain["domain"],$mail_config["maildir_path"]);
 			$maildir = str_replace("[localpart]",strtolower($_POST["email_local_part"]),$maildir);
 			$this->dataRecord["maildir"] = $maildir;
@@ -195,6 +213,13 @@ class page_action extends tform_actions {
 			
 		}
 		
+    $sys_config = $app->getconf->get_global_config('mail');
+    if($sys_config["enable_custom_login"] == "y") {
+        if(!isset($_POST["login"]) || $_POST["login"] == '') $this->dataRecord["login"] = $this->dataRecord["email"];
+        elseif(strpos($_POST["login"], '@') !== false && $_POST["login"] != $this->dataRecord["email"]) $app->tform->errorMessage .= $app->tform->lng("error_login_email_txt")."<br>";
+		} else {
+        $this->dataRecord["login"] = isset($this->dataRecord["email"]) ? $this->dataRecord["email"] : '';
+		}
 		//* if autoresponder checkbox not selected, do not save dates
 		if (!isset($_POST['autoresponder']) && array_key_exists('autoresponder_start_date', $_POST)) {
 			$this->dataRecord['autoresponder_start_date'] = array_map(create_function('$item','return 0;'), $this->dataRecord['autoresponder_start_date']);
@@ -208,44 +233,20 @@ class page_action extends tform_actions {
 		global $app, $conf;
 		
 		// Set the domain owner as mailbox owner
-		$domain = $app->db->queryOneRecord("SELECT sys_groupid, server_id FROM mail_domain WHERE domain = '".$app->db->quote($_POST["email_domain"])."' AND ".$app->tform->getAuthSQL('r'));
+		$domain = $app->db->queryOneRecord("SELECT sys_groupid, server_id FROM mail_domain WHERE domain = '".$app->db->quote($app->functions->idn_encode($_POST["email_domain"]))."' AND ".$app->tform->getAuthSQL('r'));
 		$app->db->query("UPDATE mail_user SET sys_groupid = ".$domain["sys_groupid"]." WHERE mailuser_id = ".$this->id);
 		
-		// send a welcome email to create the mailbox
-//		mail($this->dataRecord["email"],$app->tform->wordbook["welcome_mail_subject"],$app->tform->wordbook["welcome_mail_message"]);
-		
-		// tries to detect current charset, and encode subject-header and body from it to ISO-8859-1.
-		$fromCharset      = mb_detect_encoding($app->tform->lng("welcome_mail_subject"));
-		$iconvPreferences = array("input-charset" => $fromCharset,
-					"output-charset" => "ISO-8859-1",
-					"line-length" => 76,
-					"line-break-chars" => "\n",
-					"scheme" => "Q");
-
-		$welcomeFromName  = $app->tform->lng("welcome_mail_fromname_txt");
-		$welcomeFromEmail = $app->tform->lng("welcome_mail_fromemail_txt");
-		$mailHeaders      = "MIME-Version: 1.0" . "\n";
-		$mailHeaders     .= "Content-type: text/plain; charset=iso-8859-1" . "\n";
-		$mailHeaders     .= "From: $welcomeFromName  <$welcomeFromEmail>" . "\n";
-		$mailHeaders     .= "Reply-To: <$welcomeFromEmail>" . "\n";
-		$mailTarget       = $this->dataRecord["email"];
-		$mailSubject      = iconv_mime_encode("trimoff", $app->tform->lng("welcome_mail_subject"), $iconvPreferences);
-		$mailSubject      = str_replace("trimoff: ", "", $mailSubject);
-		$mailBody         = iconv ($fromCharset, "ISO-8859-1", $app->tform->lng("welcome_mail_message"));
-
-		mail($mailTarget, $mailSubject, $mailBody, $mailHeaders);
-		
 		// Spamfilter policy
-		$policy_id = intval($this->dataRecord["policy"]);
+		$policy_id = $app->functions->intval($this->dataRecord["policy"]);
 		if($policy_id > 0) {
-			$tmp_user = $app->db->queryOneRecord("SELECT id FROM spamfilter_users WHERE email = '".mysql_real_escape_string($this->dataRecord["email"])."'");
+			$tmp_user = $app->db->queryOneRecord("SELECT id FROM spamfilter_users WHERE email = '".$app->db->quote($this->dataRecord["email"])."'");
 			if($tmp_user["id"] > 0) {
 				// There is already a record that we will update
-				$app->db->datalogUpdate('spamfilter_users', "policy_id = $ploicy_id", 'id', $tmp_user["id"]);
+				$app->db->datalogUpdate('spamfilter_users', "policy_id = $policy_id", 'id', $tmp_user["id"]);
 			} else {
 				// We create a new record
 				$insert_data = "(`sys_userid`, `sys_groupid`, `sys_perm_user`, `sys_perm_group`, `sys_perm_other`, `server_id`, `priority`, `policy_id`, `email`, `fullname`, `local`) 
-				        VALUES (".$_SESSION["s"]["user"]["userid"].", ".$domain["sys_groupid"].", 'riud', 'riud', '', ".$domain["server_id"].", 10, ".$policy_id.", '".mysql_real_escape_string($this->dataRecord["email"])."', '".mysql_real_escape_string($this->dataRecord["email"])."', 'Y')";
+				        VALUES (".$_SESSION["s"]["user"]["userid"].", ".$domain["sys_groupid"].", 'riud', 'riud', '', ".$domain["server_id"].", 10, ".$policy_id.", '".$app->db->quote($this->dataRecord["email"])."', '".$app->db->quote($this->dataRecord["email"])."', 'Y')";
 				$app->db->datalogInsert('spamfilter_users', $insert_data, 'id');
 			}
 		}  // endif spamfilter policy
@@ -258,7 +259,7 @@ class page_action extends tform_actions {
 			$disabledeliver = ($this->dataRecord["postfix"] == 'y')?'n':'y';
 			$disablesmtp = ($this->dataRecord["postfix"] == 'y')?'n':'y';
 		
-			$sql = "UPDATE mail_user SET disableimap = '$disableimap', disablepop3 = '$disablepop3', disablesmtp = '$disablesmtp', disabledeliver = '$disabledeliver' WHERE mailuser_id = ".$this->id;
+			$sql = "UPDATE mail_user SET disableimap = '$disableimap', disablesieve = '$disableimap', disablepop3 = '$disablepop3', disablesmtp = '$disablesmtp', disabledeliver = '$disabledeliver', disablelda = '$disabledeliver', disabledoveadm = '$disableimap' WHERE mailuser_id = ".$this->id;
 			$app->db->query($sql);
 		}
 	}
@@ -268,12 +269,12 @@ class page_action extends tform_actions {
 		
 		// Set the domain owner as mailbox owner
 		if(isset($_POST["email_domain"])) {
-			$domain = $app->db->queryOneRecord("SELECT sys_groupid, server_id FROM mail_domain WHERE domain = '".$app->db->quote($_POST["email_domain"])."' AND ".$app->tform->getAuthSQL('r'));
+			$domain = $app->db->queryOneRecord("SELECT sys_groupid, server_id FROM mail_domain WHERE domain = '".$app->db->quote($app->functions->idn_encode($_POST["email_domain"]))."' AND ".$app->tform->getAuthSQL('r'));
 			$app->db->query("UPDATE mail_user SET sys_groupid = ".$domain["sys_groupid"]." WHERE mailuser_id = ".$this->id);
 		
 			// Spamfilter policy
-			$policy_id = intval($this->dataRecord["policy"]);
-			$tmp_user = $app->db->queryOneRecord("SELECT id FROM spamfilter_users WHERE email = '".mysql_real_escape_string($this->dataRecord["email"])."'");
+			$policy_id = $app->functions->intval($this->dataRecord["policy"]);
+			$tmp_user = $app->db->queryOneRecord("SELECT id FROM spamfilter_users WHERE email = '".$app->db->quote($this->dataRecord["email"])."'");
 			if($policy_id > 0) {
 				if($tmp_user["id"] > 0) {
 					// There is already a record that we will update
@@ -281,7 +282,7 @@ class page_action extends tform_actions {
 				} else {
 					// We create a new record
 					$insert_data = "(`sys_userid`, `sys_groupid`, `sys_perm_user`, `sys_perm_group`, `sys_perm_other`, `server_id`, `priority`, `policy_id`, `email`, `fullname`, `local`) 
-				        	VALUES (".$_SESSION["s"]["user"]["userid"].", ".$domain["sys_groupid"].", 'riud', 'riud', '', ".$domain["server_id"].", 10, ".$policy_id.", '".mysql_real_escape_string($this->dataRecord["email"])."', '".mysql_real_escape_string($this->dataRecord["email"])."', 'Y')";
+				        	VALUES (".$_SESSION["s"]["user"]["userid"].", ".$domain["sys_groupid"].", 'riud', 'riud', '', ".$domain["server_id"].", 10, ".$policy_id.", '".$app->db->quote($this->dataRecord["email"])."', '".$app->db->quote($this->dataRecord["email"])."', 'Y')";
 					$app->db->datalogInsert('spamfilter_users', $insert_data, 'id');
 				}
 			}else {
@@ -294,12 +295,12 @@ class page_action extends tform_actions {
 		
 		// Set the fields for dovecot
 		if(isset($this->dataRecord["email"])) {
-			$disableimap = ($this->dataRecord["disableimap"])?'y':'n';
-			$disablepop3 = ($this->dataRecord["disablepop3"])?'y':'n';
+			$disableimap = (isset($this->dataRecord["disableimap"]) && $this->dataRecord["disableimap"])?'y':'n';
+			$disablepop3 = (isset($this->dataRecord["disablepop3"]) && $this->dataRecord["disablepop3"])?'y':'n';
 			$disabledeliver = ($this->dataRecord["postfix"] == 'y')?'n':'y';
 			$disablesmtp = ($this->dataRecord["postfix"] == 'y')?'n':'y';
 		
-			$sql = "UPDATE mail_user SET disableimap = '$disableimap', disablepop3 = '$disablepop3', disablesmtp = '$disablesmtp', disabledeliver = '$disabledeliver' WHERE mailuser_id = ".$this->id;
+			$sql = "UPDATE mail_user SET disableimap = '$disableimap', disablesieve = '$disableimap', disablepop3 = '$disablepop3', disablesmtp = '$disablesmtp', disabledeliver = '$disabledeliver', disablelda = '$disabledeliver', disabledoveadm = '$disableimap' WHERE mailuser_id = ".$this->id;
 			$app->db->query($sql);
 		}
 		

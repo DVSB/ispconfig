@@ -46,7 +46,10 @@ class mail_user_filter_plugin {
 		
 		$app->plugin->registerEvent('mail:mail_user_filter:on_after_insert','mail_user_filter_plugin','mail_user_filter_edit');
 		$app->plugin->registerEvent('mail:mail_user_filter:on_after_update','mail_user_filter_plugin','mail_user_filter_edit');
-		
+		$app->plugin->registerEvent('mail:mail_user_filter:on_after_delete','mail_user_filter_plugin','mail_user_filter_del');
+		$app->plugin->registerEvent('mailuser:mail_user_filter:on_after_insert','mail_user_filter_plugin','mail_user_filter_edit');
+		$app->plugin->registerEvent('mailuser:mail_user_filter:on_after_update','mail_user_filter_plugin','mail_user_filter_edit');
+		$app->plugin->registerEvent('mailuser:mail_user_filter:on_after_delete','mail_user_filter_plugin','mail_user_filter_del');
 		
 	}
 	
@@ -72,13 +75,13 @@ class mail_user_filter_plugin {
 			}
 			if($skip == false && $line != '') $out .= $line ."\n";
 			if($line == '### END FILTER_ID:'.$page_form->id) {
-				$out .= $this->mail_user_filter_get_rule($page_form);
+				if($page_form->dataRecord["active"] == 'y') $out .= $this->mail_user_filter_get_rule($page_form);
 				$skip = false;
 			}
 		}
 		
 		// We did not found our rule, so we add it now as first rule.
-		if($found == false) {
+		if($found == false && $page_form->dataRecord["active"] == 'y') {
 			$new_rule = $this->mail_user_filter_get_rule($page_form);
 			$out = $new_rule . $out;
 		}
@@ -89,6 +92,30 @@ class mail_user_filter_plugin {
 		
 	}
 	
+	function mail_user_filter_del($event_name,$page_form) {
+		global $app, $conf;
+		
+		$mailuser = $app->db->queryOneRecord("SELECT custom_mailfilter FROM mail_user WHERE mailuser_id = ".$page_form->dataRecord["mailuser_id"]);
+		$skip = false;
+		$lines = explode("\n",$mailuser['custom_mailfilter']);
+		$out = '';
+		
+		foreach($lines as $line) {
+			$line = trim($line);
+			if($line == '### BEGIN FILTER_ID:'.$page_form->id) {
+				$skip = true;
+			}
+			if($skip == false && $line != '') $out .= $line ."\n";
+			if($line == '### END FILTER_ID:'.$page_form->id) {
+				$skip = false;
+			}
+		}
+		
+		$out = $app->db->quote($out);
+		$app->db->datalogUpdate('mail_user', "custom_mailfilter = '$out'", 'mailuser_id', $page_form->dataRecord["mailuser_id"]);
+	}
+	
+	
 	/*
 		private function to create the mail filter rules in maildrop or sieve format.
 	*/
@@ -97,8 +124,8 @@ class mail_user_filter_plugin {
 		global $app,$conf;
 		
 		$app->uses("getconf");
-		$mailuser_rec = $app->db->queryOneRecord("SELECT server_id FROM mail_user WHERE mailuser_id = ".intval($page_form->dataRecord["mailuser_id"]));
-		$mail_config = $app->getconf->get_server_config(intval($mailuser_rec["server_id"]),'mail');
+		$mailuser_rec = $app->db->queryOneRecord("SELECT server_id FROM mail_user WHERE mailuser_id = ".$app->functions->intval($page_form->dataRecord["mailuser_id"]));
+		$mail_config = $app->getconf->get_server_config($app->functions->intval($mailuser_rec["server_id"]),'mail');
 		
 		if($mail_config['mail_filter_syntax'] == 'sieve') {
 			
@@ -114,6 +141,8 @@ class mail_user_filter_plugin {
 			$content .= 'if header :regex    ["'.strtolower($page_form->dataRecord["source"]).'"] ["';
 			
 			$searchterm = preg_quote($page_form->dataRecord["searchterm"]);
+			$searchterm = str_replace('\\[','\\\\[',$searchterm);
+			$searchterm = str_replace('\\]','\\\\]',$searchterm);
 			
 			if($page_form->dataRecord["op"] == 'contains') {
 				$content .= ".*".$searchterm;
@@ -169,7 +198,7 @@ if ( ".'$RETURNCODE'." != 1 )
 ";
 			}
 
-			$content .= "if (/^".$page_form->dataRecord["source"].":";
+			$content .= "if (/^".$page_form->dataRecord["source"].": ";
 
 			$searchterm = preg_quote($page_form->dataRecord["searchterm"]);
 
@@ -178,7 +207,7 @@ if ( ".'$RETURNCODE'." != 1 )
 			} elseif ($page_form->dataRecord["op"] == 'is') {
 				$content .= $searchterm."$/:h)\n";
 			} elseif ($page_form->dataRecord["op"] == 'begins') {
-				$content .= " ".$searchterm."/:h)\n";
+				$content .= $searchterm."/:h)\n";
 			} elseif ($page_form->dataRecord["op"] == 'ends') {
 				$content .= ".*".$searchterm."$/:h)\n";
 			}

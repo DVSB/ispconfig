@@ -51,13 +51,13 @@ yum install ntp httpd mysql-server php php-mysql php-mbstring phpMyAdmin postfix
 
 For 32Bit systems:
 
-rpm -i http://dl.atrpms.net/all/dovecot-1.2.10-2_107.el5.i386.rpm
+rpm -i http://dl.atrpms.net/all/dovecot-1.2.11-3_108.el5.i386.rpm
 rpm -i http://dl.atrpms.net/all/dovecot-sieve-0.1.15-4.el5.i386.rpm
 
 For 64Bit Systems:
 
-rpm -i http://dl.atrpms.net/all/dovecot-1.2.10-2_107.el5.x86_64.rpm
-rpm -i http://dl.atrpms.net/all/dovecot-sieve-0.1.15-4.el5.x86_64.rpm
+rpm -ivh http://dl.atrpms.net/all/dovecot-1.2.11-3_108.el5.x86_64.rpm
+rpm -ivh http://dl.atrpms.net/all/dovecot-sieve-0.1.15-4.el5.x86_64.rpm
 
 
 chkconfig --levels 235 mysqld on
@@ -132,6 +132,7 @@ ln -s ../../ chroot
 cp /usr/share/doc/bind-9.3.6/sample/var/named/named.local /var/named/chroot/var/named/named.local
 cp /usr/share/doc/bind-9.3.6/sample/var/named/named.root /var/named/chroot/var/named/named.root
 touch /var/named/chroot/etc/named.conf
+touch /var/named/chroot/etc/named.conf.local
 
 vi /var/named/chroot/etc/named.conf
 
@@ -171,7 +172,6 @@ zone "." IN {
 include "/var/named/chroot/etc/named.conf.local";
 --------------------------------------------------------------------------------------------------
 
-
 chkconfig --levels 235 named on
 /etc/init.d/named start
 
@@ -191,6 +191,18 @@ make
 make install
 rm -rf jailkit-2.11*
 
+Edit the file /etc/sudoers
+
+vi /etc/sudoers
+
+and change the line:
+
+Defaults    requiretty
+
+to:
+
+# Defaults    requiretty
+
 
 7) Install ISPConfig 3
 
@@ -204,7 +216,7 @@ Now start the installation process by executing:
 
 php -q install.php
 
-The installer will configure all services like postfix, sasl, courier, etc. for you. A manual setup as required for ISPConfig 2 (perfect setup guides) is not nescessary. To login to the ISPConfig controlpanel, open the following URL in your browser (replace the IP to match your settings!):
+The installer will configure all services like postfix, sasl, courier, etc. for you. A manual setup as required for ISPConfig 2 (perfect setup guides) is not necessary. To login to the ISPConfig controlpanel, open the following URL in your browser (replace the IP to match your settings!):
 
 http://192.168.0.100:8080/
 

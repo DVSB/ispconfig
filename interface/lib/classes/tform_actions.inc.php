@@ -49,7 +49,7 @@ class tform_actions {
                 $app->tform->loadFormDef($tform_def_file);
 				
 				// Importing ID
-                $this->id = (isset($_REQUEST["id"]))?intval($_REQUEST["id"]):0;
+                $this->id = (isset($_REQUEST["id"]))?$app->functions->intval($_REQUEST["id"]):0;
 				
 				// show print version of the form
 				if(isset($_GET["print_form"]) && $_GET["print_form"] == 1) {
@@ -77,7 +77,16 @@ class tform_actions {
 
         function onSubmit() {
                 global $app, $conf;
-
+                
+                // check if the client is locked - he may not change anything, then.
+				if(!$app->auth->is_admin()) {
+					$client_group_id = $_SESSION["s"]["user"]["default_group"];
+					$client = $app->db->queryOneRecord("SELECT client.locked FROM sys_group, client WHERE sys_group.client_id = client.client_id and sys_group.groupid = ".$app->functions->intval($client_group_id));
+					if(is_array($client) && $client['locked'] == 'y') {
+						$app->tform->errorMessage .= $app->lng("client_you_are_locked")."<br />";
+					}
+				}
+                
                 // Calling the action functions
                 if($this->id > 0) {
 					$app->tform->action == 'EDIT';
@@ -107,14 +116,15 @@ class tform_actions {
 						
 						// Save record in database
 						$this->onUpdateSave($sql);
-						
+						$app->plugin->raiseEvent($_SESSION['s']['module']['name'].':'.$app->tform->formDef['name'].':'.'on_update_save',array('page_form'=>$this, 'sql'=>$sql));
+                        
 						// loading plugins
 						$next_tab = $app->tform->getCurrentTab();
                 		$this->loadPlugins($next_tab);
 
                         // Call plugin
                         foreach($this->plugins as $plugin) {
-                                $plugin->onInsert();
+                                $plugin->onUpdate();
                         }
 						
 						$this->onAfterUpdate();
@@ -139,7 +149,7 @@ class tform_actions {
                                 session_write_close();
                                 header($redirect);
 							// When a returnto variable is set
-							} elseif ($_SESSION["s"]["form"]["return_to_url"] != '') {
+							} elseif (isset($_SESSION["s"]["form"]["return_to_url"]) && $_SESSION["s"]["form"]["return_to_url"] != '') {
 								$redirect = $_SESSION["s"]["form"]["return_to_url"];
 								$_SESSION["s"]["form"]["return_to_url"] = '';
 								session_write_close();
@@ -185,7 +195,8 @@ class tform_actions {
                 if($app->tform->errorMessage == '') {
 						
 						$this->id = $this->onInsertSave($sql);
-						
+						$app->plugin->raiseEvent($_SESSION['s']['module']['name'].':'.$app->tform->formDef['name'].':'.'on_insert_save',array('page_form'=>$this, 'sql'=>$sql));
+                        
 						// loading plugins
 						$next_tab = $app->tform->getCurrentTab();
                 		$this->loadPlugins($next_tab);
@@ -216,9 +227,10 @@ class tform_actions {
                             header($redirect);
 							exit;
                         } elseif ($_SESSION["s"]["form"]["return_to_url"] != '') {
+							$redirect = $_SESSION["s"]["form"]["return_to_url"];
 							$_SESSION["s"]["form"]["return_to_url"] = '';
 							session_write_close();
-							header("Location: ".$_SESSION["s"]["form"]["return_to_url"]);
+							header("Location: ".$redirect);
 							exit;
 						} else {
                                 header("Location: ".$app->tform->formDef['list_default']);
@@ -288,7 +300,7 @@ class tform_actions {
                 $app->tform->loadFormDef($tform_def_file);
 
                 // importing ID
-                $this->id = intval($_REQUEST["id"]);
+                $this->id = $app->functions->intval($_REQUEST["id"]);
 
                 if($this->id > 0) {
 
@@ -315,13 +327,14 @@ class tform_actions {
 						$next_tab = $app->tform->getCurrentTab();
                 		$this->loadPlugins($next_tab);
 						
-						
+                	
                         // Call plugin
                         foreach($this->plugins as $plugin) {
                                 $plugin->onDelete();
                         }
 						
 						$this->onAfterDelete();
+						$app->plugin->raiseEvent($_SESSION['s']['module']['name'].':'.$app->tform->formDef['name'].':'.'on_after_delete',$this);
                 }
 
                 		//header("Location: ".$liste["file"]."?PHPSESSID=".$_SESSION["s"]["id"]);
@@ -482,11 +495,19 @@ class tform_actions {
 						$navibar .= '<a href="'.$app->tform->formDef['action'].'?id='.$this->id.'&print_form=1" target="_blank"><img src="../themes/iprg/icons/printer.png" border="0" alt="Drucken" /></a> &nbsp;';
 					}
 					if($app->tform->formDef['template_mailsend'] != '') {
-						$navibar .= "<a href=\"#\" onClick=\"window.open('".$app->tform->formDef['action'].'?id='.$this->id."&send_form_by_mail=1','send','width=370,height=240')\"><img src=\"../themes/iprg/icons/mail.png\" border=\"0\" alt=\"Als E-Mail versenden\" /></a>";
+						$navibar .= "<a href=\"#\" onclick=\"window.open('".$app->tform->formDef['action'].'?id='.$this->id."&send_form_by_mail=1','send','width=370,height=240')\"><img src=\"../themes/iprg/icons/mail.png\" border=\"0\" alt=\"Als E-Mail versenden\" /></a>";
 					}
 					$app->tpl->setVar('form_navibar',$navibar);
 				}
 				
+                if(isset($_SESSION['show_info_msg'])) {
+                    $app->tpl->setVar('show_info_msg', $_SESSION['show_info_msg']);
+                    unset($_SESSION['show_info_msg']);
+                }
+                if(isset($_SESSION['show_error_msg'])) {
+                    $app->tpl->setVar('show_error_msg', $_SESSION['show_error_msg']);
+                    unset($_SESSION['show_error_msg']);
+                }
 				
 				// loading plugins
                 $this->loadPlugins($this->active_tab);
@@ -536,7 +557,7 @@ class tform_actions {
                         if(!$record = $app->db->queryOneRecord($sql)) $app->error($app->lng('error_no_view_permission'));
                 } else {
                         // $record = $app->tform->encode($_POST,$this->active_tab);
-						$record = $app->tform->encode($this->dataRecord,$this->active_tab);
+						$record = $app->tform->encode($this->dataRecord,$this->active_tab,false);
                 }
 
                 $this->dataRecord = $record;

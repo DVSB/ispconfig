@@ -1,6 +1,6 @@
 <?php
 /*
-Copyright (c) 2007-2008, Till Brehm, projektfarm Gmbh and Oliver Vogel www.muv.com
+Copyright (c) 2007-2010, Till Brehm, projektfarm Gmbh and Oliver Vogel www.muv.com
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -40,7 +40,6 @@ $tform_def_file = "form/client_template.tform.php";
 
 require_once('../../lib/config.inc.php');
 require_once('../../lib/app.inc.php');
-require_once('tools.inc.php');
 
 //* Check permissions for module
 $app->auth->check_module_permissions('client');
@@ -75,18 +74,19 @@ class page_action extends tform_actions {
 	function onAfterUpdate() {
 		global $app;
 		
+        $app->uses('client_templates');
 		/*
 		 * the template has changed. apply the new data to all clients
 		 */
 		if ($this->dataRecord["template_type"] == 'm'){
 			$sql = "SELECT client_id FROM client WHERE template_master = " . $this->id;
 		} else {
-			$sql = "SELECT client_id FROM client WHERE template_additional LIKE '%/" . $this->id . '/%"';
+			$sql = "SELECT client_id FROM client WHERE template_additional LIKE '%/" . $this->id . "/%' OR template_additional LIKE '" . $this->id . "/%' OR template_additional LIKE '%/" . $this->id . "' UNION SELECT client_id FROM client_template_assigned WHERE client_template_id = " . $this->id;
 		}
 		$clients = $app->db->queryAllRecords($sql);
 		if (is_array($clients)){
 			foreach ($clients as $client){
-				applyClientTemplates($client['client_id']);
+                $app->client_templates->apply_client_templates($client['client_id']);
 			}
 		}
 	}

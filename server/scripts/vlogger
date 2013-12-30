@@ -28,6 +28,7 @@
 # 1.1   bugfix release
 # 1.2   support for mod_logio
 # 1.3	various contributed bugfixes
+# 1.3ISPconfig1 This local version has been modified for ISPConfig. Namely: "Added better error handling to vlogger script in case the MySQL database connection is not available."
 #
 # 
 # TODO:
@@ -170,9 +171,9 @@ if ( $OPTS{'h'} || !$ARGV[0] ) {
 # log directory
 my $LOGDIR;
 if ( $ARGV[0] ) {
-    if ( !-d $ARGV[0] ) {
+    if ( !-d $ARGV[0] || -l $ARGV[0]) {
         print STDERR
-          "[vlogger] target directory $ARGV[0] does not exist - exiting.\n\n";
+          "[vlogger] target directory $ARGV[0] does not exist or is a symlink - exiting.\n\n";
         exit;
     }
     $LOGDIR = $ARGV[0];
@@ -252,9 +253,14 @@ if ( $OPTS{'d'} ) {
     }
 
     # test the connection
-    my $dbh = DBI->connect( $DBI_DSN, $DBI_USER, $DBI_PASS )
-      or die "DBI Error: $!";
-    $dbh->disconnect;
+	eval {
+      my $dbh = DBI->connect( $DBI_DSN, $DBI_USER, $DBI_PASS )
+        or die "DBI Error: $!";
+      $dbh->disconnect;
+	};
+	if ($@) {
+       print "MySQL Connection problem\n";
+    }
 
     # SIGALRM dumps the tracker hash
     $SIG{ALRM} = \&dump_tracker;
@@ -423,6 +429,11 @@ else {
             unless ( -d "${vhost}" ) {
                 mkdir("${vhost}");
             }
+			
+			# Dont log to symlinks
+			if( -l "${vhost}/".time2str( $TEMPLATE, time() ) ) {
+				die("Log target is a symlink: $LOGDIR/${vhost}/".time2str( $TEMPLATE, time() ));
+			}
 
             # open the file using the template
             open $vhost, ">>${vhost}/" . time2str( $TEMPLATE, time() )
@@ -503,7 +514,8 @@ sub open_errorlog {
 
 # sub to update the database with the tracker data
 sub dump_tracker {
-    if ( keys(%tracker) > 0 ) {
+    eval {
+	if ( keys(%tracker) > 0 ) {
         my $dbh = DBI->connect( $DBI_DSN, $DBI_USER, $DBI_PASS )
           or warn "DBI Error: $!";
         foreach my $key ( keys(%tracker) ) {
@@ -529,6 +541,10 @@ sub dump_tracker {
         %tracker = ();
     }
     alarm $DBI_DUMP;
+	};
+    if ($@) {
+        print "Unable to store vlogger data in database\n";
+    }
 }
 
 # print usage info

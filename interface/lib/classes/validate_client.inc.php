@@ -36,7 +36,13 @@ class validate_client {
 	function username_unique($field_name, $field_value, $validator) {
 		global $app;
 		
-		if($app->tform->primary_id == 0) {
+		if(isset($app->remoting_lib->primary_id)) {
+			$client_id = $app->remoting_lib->primary_id;
+		} else {
+			$client_id = $app->tform->primary_id;
+		}
+		
+		if($client_id == 0) {
         	$num_rec = $app->db->queryOneRecord("SELECT count(*) as number FROM sys_user WHERE username = '".$app->db->quote($field_value)."'");
             	if($num_rec["number"] > 0) {
                 	$errmsg = $validator['errmsg'];
@@ -47,7 +53,7 @@ class validate_client {
 					}
                 }
         } else {
-        	$num_rec = $app->db->queryOneRecord("SELECT count(*) as number FROM sys_user WHERE username = '".$app->db->quote($field_value)."' AND client_id != ".$app->tform->primary_id);
+        	$num_rec = $app->db->queryOneRecord("SELECT count(*) as number FROM sys_user WHERE username = '".$app->db->quote($field_value)."' AND client_id != ".$client_id);
 			if($num_rec["number"] > 0) {
             	$errmsg = $validator['errmsg'];
                 if(isset($app->tform->wordbook[$errmsg])) {
@@ -57,6 +63,37 @@ class validate_client {
 				}
 			}
 		}
+	}
+	
+	function username_collision($field_name, $field_value, $validator) {
+		global $app;
+		
+		if(isset($app->remoting_lib->primary_id)) {
+			$client_id = $app->remoting_lib->primary_id;
+		} else {
+			$client_id = $app->tform->primary_id;
+		}
+		
+		$app->uses('getconf');
+		$global_config = $app->getconf->get_global_config('sites');
+		
+		if((trim($field_value) == 'web' || preg_match('/^web[0-9]/',$field_value)) && 
+		  ($global_config['ftpuser_prefix'] == '[CLIENTNAME]' || 
+		   $global_config['ftpuser_prefix'] == '' ||
+		   $global_config['shelluser_prefix'] == '[CLIENTNAME]' ||
+		   $global_config['shelluser_prefix'] == '' ) &&
+		   $global_config['client_username_web_check_disabled'] == 'n') {
+			$errmsg = $validator['errmsg'];
+			if(isset($app->tform->wordbook[$errmsg])) {
+				return $app->tform->wordbook[$errmsg]."<br>\r\n";
+			} else {
+				return $errmsg."<br>\r\n";
+			}
+		}
+		
+		
+		
+		
 	}
 	
 	

@@ -34,7 +34,7 @@ apt-get update
 
 Now Install Postfix, Courier, Saslauthd, MySQL, phpMyAdmin, ntpdate, rkhunter, binutils with the following command line (on one line!):
 
-apt-get install postfix postfix-mysql postfix-doc mysql-client mysql-server courier-authdaemon courier-authlib-mysql courier-pop courier-pop-ssl courier-imap courier-imap-ssl libsasl2 libsasl2-modules libsasl2-modules-sql sasl2-bin libpam-mysql openssl courier-maildrop getmail4 ntp ntpdate rkhunter binutils
+apt-get install postfix postfix-mysql postfix-doc mysql-client mysql-server courier-authdaemon courier-authlib-mysql courier-pop courier-pop-ssl courier-imap courier-imap-ssl libsasl2 libsasl2-modules libsasl2-modules-sql sasl2-bin libpam-mysql openssl courier-maildrop getmail4 ntp ntpdate rkhunter binutils sudo
 
 Answer the questions from the package manager as follows.
 
@@ -167,7 +167,7 @@ Now start the installation process by executing:
 
 php -q install.php
 
-The installer will configure all services like postfix, sasl, courier, etc. for you. A manual setup as required for ISPConfig 2 (perfect setup guides) is not nescessary. To login to the ISPConfig controlpanel, open the following URL in your browser (replace the IP to match your settings!):
+The installer will configure all services like postfix, sasl, courier, etc. for you. A manual setup as required for ISPConfig 2 (perfect setup guides) is not necessary. To login to the ISPConfig controlpanel, open the following URL in your browser (replace the IP to match your settings!):
 
 http://192.168.0.100:8080/
 

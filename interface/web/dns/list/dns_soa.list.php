@@ -25,7 +25,7 @@ $liste["table_idx"]			= "id";
 $liste["search_prefix"] 	= "search_";
 
 // Records per page
-$liste["records_per_page"] 	= 15;
+$liste["records_per_page"] 	= "15";
 
 // Script File of the list
 $liste["file"]				= "dns_soa_list.php";
@@ -55,7 +55,7 @@ $liste["item"][] = array(	'field'		=> "active",
 							'prefix'	=> "",
 							'suffix'	=> "",
 							'width'		=> "",
-							'value'		=> array('y' => "<div id=\"ir-Yes\" class=\"swap\"><span>Yes</span></div>",'n' => "<div class=\"swap\" id=\"ir-No\"><span>No</span></div>"));
+							'value'		=> array('Y' => "<div id=\"ir-Yes\" class=\"swap\"><span>Yes</span></div>",'N' => "<div class=\"swap\" id=\"ir-No\"><span>No</span></div>"));
 
 
 $liste["item"][] = array(	'field'		=> "server_id",
@@ -73,6 +73,9 @@ $liste["item"][] = array(	'field'		=> "server_id",
 
 $liste["item"][] = array(	'field'		=> "origin",
 							'datatype'	=> "VARCHAR",
+                            'filters'   => array( 0 => array( 'event' => 'SHOW',
+                                                              'type' => 'IDNTOUTF8')
+                                                ),
 							'formtype'	=> "TEXT",
 							'op'		=> "like",
 							'prefix'	=> "%",
@@ -83,6 +86,9 @@ $liste["item"][] = array(	'field'		=> "origin",
 
 $liste["item"][] = array(	'field'		=> "ns",
 							'datatype'	=> "VARCHAR",
+                            'filters'   => array( 0 => array( 'event' => 'SHOW',
+                                                              'type' => 'IDNTOUTF8')
+                                                ),
 							'formtype'	=> "TEXT",
 							'op'		=> "like",
 							'prefix'	=> "%",
@@ -93,6 +99,9 @@ $liste["item"][] = array(	'field'		=> "ns",
 
 $liste["item"][] = array(	'field'		=> "mbox",
 							'datatype'	=> "VARCHAR",
+                            'filters'   => array( 0 => array( 'event' => 'SHOW',
+                                                              'type' => 'IDNTOUTF8')
+                                                ),
 							'formtype'	=> "TEXT",
 							'op'		=> "like",
 							'prefix'	=> "%",

@@ -76,7 +76,7 @@ class page_action extends tform_actions {
 		global $app, $conf;
 		
 		// Get the parent soa record of the domain
-		$soa = $app->db->queryOneRecord("SELECT * FROM dns_soa WHERE id = '".intval($_POST["zone"])."' AND ".$app->tform->getAuthSQL('r'));
+		$soa = $app->db->queryOneRecord("SELECT * FROM dns_soa WHERE id = '".$app->functions->intval($_POST["zone"])."' AND ".$app->tform->getAuthSQL('r'));
 
 		// Check if Domain belongs to user
 		if($soa["id"] != $_POST["zone"]) $app->tform->errorMessage .= $app->tform->wordbook["no_zone_perm"];
@@ -108,15 +108,37 @@ class page_action extends tform_actions {
 		parent::onSubmit();
 	}
 	
+	function onInsert() {
+		global $app, $conf;
+		
+		// Check if record is existing already
+		$duplicate_mx = $app->db->queryOneRecord("SELECT * FROM dns_rr WHERE zone = ".$app->functions->intval($this->dataRecord["zone"])." AND name = '".$this->dataRecord["name"]."' AND type = '".$this->dataRecord["type"]."' AND data = '".$this->dataRecord["data"]."' AND ".$app->tform->getAuthSQL('r'));
+		
+		if(is_array($duplicate_mx) && !empty($duplicate_mx)) $app->error($app->tform->wordbook["duplicate_mx_record_txt"]);
+		
+		parent::onInsert();
+	}
+	
+	function onUpdate() {
+		global $app, $conf;
+		
+		// Check if record is existing already
+		$duplicate_mx = $app->db->queryOneRecord("SELECT * FROM dns_rr WHERE zone = ".$app->functions->intval($this->dataRecord["zone"])." AND name = '".$this->dataRecord["name"]."' AND type = '".$this->dataRecord["type"]."' AND data = '".$this->dataRecord["data"]."' AND id != ".$app->functions->intval($this->dataRecord["id"])." AND ".$app->tform->getAuthSQL('r'));
+		
+		if(is_array($duplicate_mx) && !empty($duplicate_mx)) $app->error($app->tform->wordbook["duplicate_mx_record_txt"]);
+		
+		parent::onUpdate();
+	}
+	
 	function onAfterInsert() {
 		global $app, $conf;
 		
 		//* Set the sys_groupid of the rr record to be the same then the sys_groupid of the soa record
-		$soa = $app->db->queryOneRecord("SELECT sys_groupid,serial FROM dns_soa WHERE id = '".intval($this->dataRecord["zone"])."' AND ".$app->tform->getAuthSQL('r'));
+		$soa = $app->db->queryOneRecord("SELECT sys_groupid,serial FROM dns_soa WHERE id = '".$app->functions->intval($this->dataRecord["zone"])."' AND ".$app->tform->getAuthSQL('r'));
 		$app->db->datalogUpdate('dns_rr', "sys_groupid = ".$soa['sys_groupid'], 'id', $this->id);
 
 		//* Update the serial number of the SOA record
-		$soa_id = intval($_POST["zone"]);
+		$soa_id = $app->functions->intval($_POST["zone"]);
 		$serial = $app->validate_dns->increase_serial($soa["serial"]);
 		$app->db->datalogUpdate('dns_soa', "serial = $serial", 'id', $soa_id);
 	}
@@ -125,8 +147,8 @@ class page_action extends tform_actions {
 		global $app, $conf;
 		
 		//* Update the serial number of the SOA record
-		$soa = $app->db->queryOneRecord("SELECT serial FROM dns_soa WHERE id = '".intval($this->dataRecord["zone"])."' AND ".$app->tform->getAuthSQL('r'));
-		$soa_id = intval($_POST["zone"]);
+		$soa = $app->db->queryOneRecord("SELECT serial FROM dns_soa WHERE id = '".$app->functions->intval($this->dataRecord["zone"])."' AND ".$app->tform->getAuthSQL('r'));
+		$soa_id = $app->functions->intval($_POST["zone"]);
 		$serial = $app->validate_dns->increase_serial($soa["serial"]);
 		$app->db->datalogUpdate('dns_soa', "serial = $serial", 'id', $soa_id);
 	}

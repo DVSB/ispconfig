@@ -1,7 +1,7 @@
 <?php
 
 /*
-Copyright (c) 2007, Till Brehm, projektfarm Gmbh
+Copyright (c) 2007-2010, Till Brehm, projektfarm Gmbh
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -34,14 +34,16 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 error_reporting(E_ALL|E_STRICT);
 
+define('INSTALLER_RUN', true);
+
 //** The banner on the command line
 echo "\n\n".str_repeat('-',80)."\n";
-echo " _____ ___________   _____              __ _       
-|_   _/  ___| ___ \ /  __ \            / _(_)      
-  | | \ `--.| |_/ / | /  \/ ___  _ __ | |_ _  __ _ 
-  | |  `--. \  __/  | |    / _ \| '_ \|  _| |/ _` |
- _| |_/\__/ / |     | \__/\ (_) | | | | | | | (_| |
- \___/\____/\_|      \____/\___/|_| |_|_| |_|\__, |
+echo " _____ ___________   _____              __ _         ____
+|_   _/  ___| ___ \ /  __ \            / _(_)       /__  \
+  | | \ `--.| |_/ / | /  \/ ___  _ __ | |_ _  __ _    _/ /
+  | |  `--. \  __/  | |    / _ \| '_ \|  _| |/ _` |  |_ |
+ _| |_/\__/ / |     | \__/\ (_) | | | | | | | (_| | ___\ \
+ \___/\____/\_|      \____/\___/|_| |_|_| |_|\__, | \____/
                                               __/ |
                                              |___/ ";
 echo "\n".str_repeat('-',80)."\n";
@@ -49,6 +51,9 @@ echo "\n\n>> Update  \n\n";
 
 //** Include the library with the basic installer functions
 require_once('lib/install.lib.php');
+
+//** Include the library with the basic updater functions
+require_once('lib/update.lib.php');
 
 //** Include the base class of the installer class
 require_once('lib/installer_base.lib.php');
@@ -63,7 +68,7 @@ define('ISPC_INSTALL_ROOT', realpath(dirname(__FILE__).'/../'));
 
 //** Check for ISPConfig 2.x versions
 if(is_dir('/root/ispconfig') || is_dir('/home/admispconfig')) {
-	die('This software can not be installed on a server wich runs ISPConfig 2.x.');
+	die('This software cannot be installed on a server wich runs ISPConfig 2.x.');
 }
 
 //** Get distribution identifier
@@ -73,9 +78,9 @@ include_once("/usr/local/ispconfig/server/lib/config.inc.php");
 $conf_old = $conf;
 unset($conf);
 
-if($dist['id'] == '') die('Linux Dustribution or Version not recognized.');
+if($dist['id'] == '') die('Linux distribution or version not recognized.');
 
-//** Include the distribution specific installer class library and configuration
+//** Include the distribution-specific installer class library and configuration
 if(is_file('dist/lib/'.$dist['baseid'].'.lib.php')) include_once('dist/lib/'.$dist['baseid'].'.lib.php');
 include_once('dist/lib/'.$dist['id'].'.lib.php');
 include_once('dist/conf/'.$dist['id'].'.conf.php');
@@ -85,7 +90,6 @@ exec('hostname -f', $tmp_out);
 $conf['hostname'] = $tmp_out[0];
 unset($tmp_out);
 
-
 //** Set the mysql login information
 $conf["mysql"]["host"] = $conf_old["db_host"];
 $conf["mysql"]["database"] = $conf_old["db_database"];
@@ -93,7 +97,11 @@ $conf['mysql']['charset'] = 'utf8';
 $conf["mysql"]["ispconfig_user"] = $conf_old["db_user"];
 $conf["mysql"]["ispconfig_password"] = $conf_old["db_password"];
 $conf['language'] = $conf_old['language'];
+$conf['theme'] = $conf_old['theme'];
 if($conf['language'] == '{language}') $conf['language'] = 'en';
+$conf['timezone'] = (isset($conf_old['timezone']))?$conf_old['timezone']:'UTC';
+if($conf['timezone'] == '{timezone}' or trim($conf['timezone']) == '') $conf['timezone'] = 'UTC';
+$conf['language_file_import_enabled'] = (isset($conf_old['language_file_import_enabled']))?$conf_old['language_file_import_enabled']:true;
 
 if(isset($conf_old["dbmaster_host"])) $conf["mysql"]["master_host"] = $conf_old["dbmaster_host"];
 if(isset($conf_old["dbmaster_database"])) $conf["mysql"]["master_database"] = $conf_old["dbmaster_database"];
@@ -117,46 +125,67 @@ $inst->is_update = true;
 //** Detect the installed applications
 $inst->find_installed_apps();
 
-echo "This application will update ISPConfig 3 on your server.\n";
+echo "This application will update ISPConfig 3 on your server.\n\n";
+
+//* Make a backup before we start the update
+$do_backup = $inst->simple_query('Shall the script create a ISPConfig backup in /var/backup/ now?', array('yes','no'),'yes');
+if($do_backup == 'yes') {
+	
+	//* Create the backup directory
+	$backup_path = '/var/backup/ispconfig_'.@date('Y-m-d_H-i');
+	$conf['backup_path'] = $backup_path;
+	exec("mkdir -p $backup_path");
+	exec("chown root:root $backup_path");
+	exec("chmod 700 $backup_path");
+	
+	//* Do the backup
+	swriteln('Creating backup of "/usr/local/ispconfig" directory...');
+	exec("tar pcfz $backup_path/ispconfig_software.tar.gz /usr/local/ispconfig 2> /dev/null",$out,$returnvar);
+	if($returnvar != 0) die("Backup failed. We stop here...\n");
+	
+	swriteln('Creating backup of "/etc" directory...');
+	exec("tar pcfz $backup_path/etc.tar.gz /etc 2> /dev/null",$out,$returnvar);
+	if($returnvar != 0) die("Backup failed. We stop here...\n");
+	
+	exec("chown root:root $backup_path/*.tar.gz");
+	exec("chmod 700 $backup_path/*.tar.gz");
+}
+
 
 //** Initialize the MySQL server connection
 include_once('lib/mysql.lib.php');
 
 //** Database update is a bit brute force and should be rebuild later ;)
 
-//** Ask user for mysql admin_password if empty
-if( empty($conf["mysql"]["admin_password"]) ) {
+/*
+ * Try to read the DB-admin settings
+ */
+$clientdb_host			= '';
+$clientdb_user			= '';
+$clientdb_password		= '';
+include_once("/usr/local/ispconfig/server/lib/mysql_clientdb.conf");
+$conf["mysql"]["admin_user"] = $clientdb_user;
+$conf["mysql"]["admin_password"] = $clientdb_password;
+$clientdb_host			= '';
+$clientdb_user			= '';
+$clientdb_password		= '';
 
-	$conf["mysql"]["admin_password"] = $inst->free_query('MySQL root password', $conf['mysql']['admin_password']);
-}
-
-//** load the pre update sql script do perform modifications on the database before the database is dumped
-if(is_file(ISPC_INSTALL_ROOT."/install/sql/pre_update.sql")) {
-	if($conf['mysql']['admin_password'] == '') {
-		caselog("mysql --default-character-set=".$conf['mysql']['charset']." -h '".$conf['mysql']['host']."' -u '".$conf['mysql']['admin_user']."' '".$conf['mysql']['database']."' < '".ISPC_INSTALL_ROOT."/install/sql/pre_update.sql' &> /dev/null", __FILE__, __LINE__, 'read in ispconfig3.sql', 'could not read in ispconfig3.sql');
+//** Test mysql root connection
+$finished = false;
+do {
+	if(@mysql_connect($conf["mysql"]["host"],$conf["mysql"]["admin_user"],$conf["mysql"]["admin_password"])) {
+		$finished = true;
 	} else {
-		caselog("mysql --default-character-set=".$conf['mysql']['charset']." -h '".$conf['mysql']['host']."' -u '".$conf['mysql']['admin_user']."' -p'".$conf['mysql']['admin_password']."' '".$conf['mysql']['database']."' < '".ISPC_INSTALL_ROOT."/install/sql/pre_update.sql' &> /dev/null", __FILE__, __LINE__, 'read in ispconfig3.sql', 'could not read in ispconfig3.sql');
+		swriteln($inst->lng('Unable to connect to mysql server').' '.mysql_error());
+		$conf["mysql"]["admin_password"] = $inst->free_query('MySQL root password', $conf['mysql']['admin_password']);
 	}
-}
+} while ($finished == false);
+unset($finished);
 
-//** export the current database data
-if( !empty($conf["mysql"]["admin_password"]) ) {
-
-	system("mysqldump -h '".$conf['mysql']['host']."' -u '".$conf['mysql']['admin_user']."' -p'".$conf['mysql']['admin_password']."' -c -t --add-drop-table --create-options --quick --result-file=existing_db.sql ".$conf['mysql']['database']);
-}
-else {
-
-	system("mysqldump -h '".$conf['mysql']['host']."' -u '".$conf['mysql']['admin_user']."' -c -t --add-drop-table --create-options --quick --result-file=existing_db.sql ".$conf['mysql']['database']);
-}
-
-if(filesize('existing_db.sql') < 30000) die('Possible problem with dumping the database. We will stop here. Please check the file existing_db.sql');
-
-// create a backup copy of the ispconfig database in the root folder
-$backup_db_name = '/root/ispconfig_db_backup_'.@date('Y-m-d_h-i').'.sql';
-copy('existing_db.sql',$backup_db_name);
-exec("chmod 700 $backup_db_name");
-exec("chown root:root $backup_db_name");
-
+/*
+ *  Prepare the dump of the database 
+ */
+prepareDBDump();
 
 //* initialize the database
 $inst->db = new db();
@@ -195,104 +224,29 @@ if($conf['mysql']['master_slave_setup'] == 'y') {
 	$inst->dbmaster = $inst->db;
 }
 
-//* Update $conf array with values from the server.ini that shall be preserved
-$tmp = $inst->db->queryOneRecord("SELECT * FROM ".$conf["mysql"]["database"].".server WHERE server_id = ".$conf['server_id']);
-$ini_array = ini_to_array(stripslashes($tmp['config']));
+/*
+ *  Check all tables
+*/
+checkDbHealth();
 
-if(count($ini_array) == 0) die('Unable to read server configuration from database.');
+/*
+ *  dump the new Database and reconfigure the server.ini
+ */
+updateDbAndIni();
 
-$conf['services']['mail'] = ($tmp['mail_server'] == 1)?true:false;
-$conf['services']['web'] = ($tmp['web_server'] == 1)?true:false;
-$conf['services']['dns'] = ($tmp['dns_server'] == 1)?true:false;
-$conf['services']['file'] = ($tmp['file_server'] == 1)?true:false;
-$conf['services']['db'] = ($tmp['db_server'] == 1)?true:false;
-$conf['services']['vserver'] = ($tmp['vserver_server'] == 1)?true:false;
-$conf['postfix']['vmail_mailbox_base'] = $ini_array['mail']['homedir_path'];
-
-//** Delete the old database
-if( !$inst->db->query('DROP DATABASE IF EXISTS '.$conf['mysql']['database']) ) {
-
-	$inst->error('Unable to drop MySQL database: '.$conf['mysql']['database'].'.');
-}
-
-//** Create the mysql database
-$inst->configure_database();
-
-if($conf['mysql']['master_slave_setup'] == 'y') {
+/*
+ * Reconfigure the permisson if needed
+ * (if this is done at client side, only this client is updated.
+ * If this is done at server side, all clients are updated.
+ */
+//if($conf_old['dbmaster_user'] != '' or $conf_old['dbmaster_host'] != '') {
 	//** Update master database rights
 	$reconfigure_master_database_rights_answer = $inst->simple_query('Reconfigure Permissions in master database?', array('yes','no'),'no');
 
 	if($reconfigure_master_database_rights_answer == 'yes') {
 		$inst->grant_master_database_rights();
 	}
-}
-
-//** empty all databases
-$db_tables = $inst->db->getTables();
-
-foreach($db_tables as $table) {
-
-	$inst->db->query("TRUNCATE $table");
-}
-
-//** load old data back into database
-if( !empty($conf["mysql"]["admin_password"]) ) {
-
-	system("mysql --default-character-set=".$conf['mysql']['charset']." -h '".$conf['mysql']['host']."' -u '".$conf['mysql']['admin_user']."' -p'".$conf['mysql']['admin_password']."' ".$conf['mysql']['database']." < existing_db.sql");
-} else {
-
-	system("mysql --default-character-set=".$conf['mysql']['charset']." -h '".$conf['mysql']['host']."' -u '".$conf['mysql']['admin_user']."' ".$conf['mysql']['database']." < existing_db.sql");
-}
-
-
-//** Update server ini
-$tmp_server_rec = $inst->db->queryOneRecord("SELECT config FROM server WHERE server_id = ".$conf['server_id']);
-$old_ini_array = ini_to_array(stripslashes($tmp_server_rec['config']));
-unset($tmp_server_rec);
-$tpl_ini_array = ini_to_array(rf('tpl/server.ini.master'));
-
-// update the new template with the old values
-if(is_array($old_ini_array)) {
-	foreach($old_ini_array as $tmp_section_name => $tmp_section_content) {
-		foreach($tmp_section_content as $tmp_var_name => $tmp_var_content) {
-			$tpl_ini_array[$tmp_section_name][$tmp_var_name] = $tmp_var_content;
-		}
-	}
-}
-
-$new_ini = array_to_ini($tpl_ini_array);
-$inst->db->query("UPDATE server SET config = '".mysql_real_escape_string($new_ini)."' WHERE server_id = ".$conf['server_id']);
-unset($old_ini_array);
-unset($tpl_ini_array);
-unset($new_ini);
-
-
-//** Update system ini
-$tmp_server_rec = $inst->db->queryOneRecord("SELECT config FROM sys_ini WHERE sysini_id = 1");
-$old_ini_array = ini_to_array(stripslashes($tmp_server_rec['config']));
-unset($tmp_server_rec);
-$tpl_ini_array = ini_to_array(rf('tpl/system.ini.master'));
-
-// update the new template with the old values
-if(is_array($old_ini_array)) {
-	foreach($old_ini_array as $tmp_section_name => $tmp_section_content) {
-		foreach($tmp_section_content as $tmp_var_name => $tmp_var_content) {
-			$tpl_ini_array[$tmp_section_name][$tmp_var_name] = $tmp_var_content;
-		}
-	}
-}
-
-$new_ini = array_to_ini($tpl_ini_array);
-$tmp = $inst->db->queryOneRecord('SELECT count(sysini_id) as number FROM sys_ini WHERE 1');
-if($tmp['number'] == 0) {
-	$inst->db->query("INSERT INTO sys_ini (sysini_id, config) VALUES (1,'".mysql_real_escape_string($new_ini)."')");
-} else {
-	$inst->db->query("UPDATE sys_ini SET config = '".mysql_real_escape_string($new_ini)."' WHERE sysini_id = 1");
-}
-unset($old_ini_array);
-unset($tpl_ini_array);
-unset($new_ini);
-
+//}
 
 //** Shall the services be reconfigured during update
 $reconfigure_services_answer = $inst->simple_query('Reconfigure Services?', array('yes','no'),'yes');
@@ -303,24 +257,28 @@ if($reconfigure_services_answer == 'yes') {
 		//** Configure postfix
 		swriteln('Configuring Postfix');
 		$inst->configure_postfix('dont-create-certs');
+		
+		//** Configure mailman
+		swriteln('Configuring Mailman');
+		$inst->configure_mailman('update');
 	
 		//* Configure Jailkit
 		swriteln('Configuring Jailkit');
 		$inst->configure_jailkit();
-	
-		//** Configure saslauthd
-		swriteln('Configuring SASL');
-		$inst->configure_saslauthd();
-	
-		//** Configure PAM
-		swriteln('Configuring PAM');
-		$inst->configure_pam();
 
 		if($conf['dovecot']['installed'] == true) {
 			//* Configure dovecot
 			swriteln('Configuring Dovecot');
 			$inst->configure_dovecot();
 		} else {
+			//** Configure saslauthd
+			swriteln('Configuring SASL');
+			$inst->configure_saslauthd();
+	
+			//** Configure PAM
+			swriteln('Configuring PAM');
+			$inst->configure_pam();
+		
 			//* Configure courier
 			swriteln('Configuring Courier');
 			$inst->configure_courier();
@@ -339,7 +297,7 @@ if($reconfigure_services_answer == 'yes') {
 		$inst->configure_getmail();
 	}
 	
-	if($conf['services']['web']) {
+	if($conf['services']['web'] && $conf['pureftpd']['installed'] == true) {
 		//** Configure Pureftpd
 		swriteln('Configuring Pureftpd');
 		$inst->configure_pureftpd();
@@ -360,38 +318,74 @@ if($reconfigure_services_answer == 'yes') {
 	}
 	
 	if($conf['services']['web']) {
-		//** Configure Apache
-		swriteln('Configuring Apache');
-		$inst->configure_apache();
+		if($conf['webserver']['server_type'] == 'apache'){
+			//** Configure Apache
+			swriteln('Configuring Apache');
+			$inst->configure_apache();
         
-        //** Configure vlogger
-        swriteln('Configuring vlogger');
-        $inst->configure_vlogger();
+			//** Configure vlogger
+			swriteln('Configuring vlogger');
+			$inst->configure_vlogger();
+		} else {
+			//** Configure nginx
+			swriteln('Configuring nginx');
+			$inst->configure_nginx();
+		}
 		
 		//** Configure apps vhost
 		swriteln('Configuring Apps vhost');
 		$inst->configure_apps_vhost();
 	}
-	
+
 
 	//* Configure DBServer
 	swriteln('Configuring Database');
 	$inst->configure_dbserver();
 
 	
-	//if(@is_dir('/etc/Bastille')) {
-	//* Configure Firewall
-	swriteln('Configuring Firewall');
-	$inst->configure_firewall();
-	//}
+	if($conf['services']['firewall']) {
+		if($conf['ufw']['installed'] == true) {
+			//* Configure Ubuntu Firewall
+			$conf['services']['firewall'] = true;
+			swriteln('Configuring Ubuntu Firewall');
+			$inst->configure_ufw_firewall();
+		} else {
+			//* Configure Bastille Firewall
+			swriteln('Configuring Bastille Firewall');
+			$inst->configure_bastille_firewall();
+		}
+	}
+	
+	/*
+	if($conf['squid']['installed'] == true) {
+		swriteln('Configuring Squid');
+		$inst->configure_squid();
+	} else if($conf['nginx']['installed'] == true) {
+		swriteln('Configuring Nginx');
+		$inst->configure_nginx();
+	}
+	*/
 }
 
 //** Configure ISPConfig
 swriteln('Updating ISPConfig');
 
 
-//** Customise the port ISPConfig runs on
-$conf['apache']['vhost_port'] = $inst->free_query('ISPConfig Port', '8080');
+if ($conf['services']['web'] && $inst->install_ispconfig_interface) {
+	//** Customise the port ISPConfig runs on
+	$ispconfig_port_number = get_ispconfig_port_number();
+	if($conf['webserver']['server_type'] == 'nginx'){
+		$conf['nginx']['vhost_port'] = $inst->free_query('ISPConfig Port', $ispconfig_port_number);
+	} else {
+		$conf['apache']['vhost_port'] = $inst->free_query('ISPConfig Port', $ispconfig_port_number);
+	}
+	
+	
+	// $ispconfig_ssl_default = (is_ispconfig_ssl_enabled() == true)?'y':'n';
+	if(strtolower($inst->simple_query('Create new ISPConfig SSL certificate',array('yes','no'),'no')) == 'yes') {
+		$inst->make_ispconfig_ssl_cert();
+	}
+}
 
 $inst->install_ispconfig();
 
@@ -405,27 +399,42 @@ if($update_crontab_answer == 'yes') {
 //** Restart services:
 if($reconfigure_services_answer == 'yes') {
 	swriteln('Restarting services ...');
-	if($conf['mysql']['init_script'] != '' && is_file($conf['init_scripts'].'/'.$conf['mysql']['init_script']))					system($conf['init_scripts'].'/'.$conf['mysql']['init_script'].' restart');
+	if($conf['mysql']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['mysql']['init_script']))					system($conf['init_scripts'].'/'.$conf['mysql']['init_script'].' restart');
 	if($conf['services']['mail']) {
-		if($conf['postfix']['init_script'] != '' && is_file($conf['init_scripts'].'/'.$conf['postfix']['init_script']))				system($conf['init_scripts'].'/'.$conf['postfix']['init_script'].' restart');
-		if($conf['saslauthd']['init_script'] != '' && is_file($conf['init_scripts'].'/'.$conf['saslauthd']['init_script']))			system($conf['init_scripts'].'/'.$conf['saslauthd']['init_script'].' restart');
-		if($conf['amavis']['init_script'] != '' && is_file($conf['init_scripts'].'/'.$conf['amavis']['init_script']))					system($conf['init_scripts'].'/'.$conf['amavis']['init_script'].' restart');
-		if($conf['clamav']['init_script'] != '' && is_file($conf['init_scripts'].'/'.$conf['clamav']['init_script']))					system($conf['init_scripts'].'/'.$conf['clamav']['init_script'].' restart');
-		if($conf['courier']['courier-authdaemon'] != '' && is_file($conf['init_scripts'].'/'.$conf['courier']['courier-authdaemon'])) system($conf['init_scripts'].'/'.$conf['courier']['courier-authdaemon'].' restart');
-		if($conf['courier']['courier-imap'] != '' && is_file($conf['init_scripts'].'/'.$conf['courier']['courier-imap'])) 			system($conf['init_scripts'].'/'.$conf['courier']['courier-imap'].' restart');
-		if($conf['courier']['courier-imap-ssl'] != '' && is_file($conf['init_scripts'].'/'.$conf['courier']['courier-imap-ssl'])) 	system($conf['init_scripts'].'/'.$conf['courier']['courier-imap-ssl'].' restart');
-		if($conf['courier']['courier-pop'] != '' && is_file($conf['init_scripts'].'/'.$conf['courier']['courier-pop'])) 				system($conf['init_scripts'].'/'.$conf['courier']['courier-pop'].' restart');
-		if($conf['courier']['courier-pop-ssl'] != '' && is_file($conf['init_scripts'].'/'.$conf['courier']['courier-pop-ssl'])) 		system($conf['init_scripts'].'/'.$conf['courier']['courier-pop-ssl'].' restart');
-		if($conf['dovecot']['init_script'] != '' && is_file($conf['init_scripts'].'/'.$conf['dovecot']['init_script'])) 		system($conf['init_scripts'].'/'.$conf['dovecot']['init_script'].' restart');
+		if($conf['postfix']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['postfix']['init_script']))				system($conf['init_scripts'].'/'.$conf['postfix']['init_script'].' restart');
+		if($conf['saslauthd']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['saslauthd']['init_script']))			system($conf['init_scripts'].'/'.$conf['saslauthd']['init_script'].' restart');
+		if($conf['amavis']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['amavis']['init_script']))					system($conf['init_scripts'].'/'.$conf['amavis']['init_script'].' restart');
+		if($conf['clamav']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['clamav']['init_script']))					system($conf['init_scripts'].'/'.$conf['clamav']['init_script'].' restart');
+		if($conf['courier']['courier-authdaemon'] != '' && is_executable($conf['init_scripts'].'/'.$conf['courier']['courier-authdaemon'])) system($conf['init_scripts'].'/'.$conf['courier']['courier-authdaemon'].' restart');
+		if($conf['courier']['courier-imap'] != '' && is_executable($conf['init_scripts'].'/'.$conf['courier']['courier-imap'])) 			system($conf['init_scripts'].'/'.$conf['courier']['courier-imap'].' restart');
+		if($conf['courier']['courier-imap-ssl'] != '' && is_executable($conf['init_scripts'].'/'.$conf['courier']['courier-imap-ssl'])) 	system($conf['init_scripts'].'/'.$conf['courier']['courier-imap-ssl'].' restart');
+		if($conf['courier']['courier-pop'] != '' && is_executable($conf['init_scripts'].'/'.$conf['courier']['courier-pop'])) 				system($conf['init_scripts'].'/'.$conf['courier']['courier-pop'].' restart');
+		if($conf['courier']['courier-pop-ssl'] != '' && is_executable($conf['init_scripts'].'/'.$conf['courier']['courier-pop-ssl'])) 		system($conf['init_scripts'].'/'.$conf['courier']['courier-pop-ssl'].' restart');
+		if($conf['dovecot']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['dovecot']['init_script'])) 		system($conf['init_scripts'].'/'.$conf['dovecot']['init_script'].' restart');
+		if($conf['mailman']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['mailman']['init_script'])) 		system('nohup '.$conf['init_scripts'].'/'.$conf['mailman']['init_script'].' restart >/dev/null 2>&1 &');
 	}
 	if($conf['services']['web']) {
-		if($conf['apache']['init_script'] != '' && is_file($conf['init_scripts'].'/'.$conf['apache']['init_script'])) 				system($conf['init_scripts'].'/'.$conf['apache']['init_script'].' restart');
-		if($conf['pureftpd']['init_script'] != '' && is_file($conf['init_scripts'].'/'.$conf['pureftpd']['init_script']))				system($conf['init_scripts'].'/'.$conf['pureftpd']['init_script'].' restart');
+		if($conf['webserver']['server_type'] == 'apache' && $conf['apache']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['apache']['init_script'])) 				system($conf['init_scripts'].'/'.$conf['apache']['init_script'].' restart');
+		//* Reload is enough for nginx
+		if($conf['webserver']['server_type'] == 'nginx'){
+			if($conf['nginx']['php_fpm_init_script'] != '' && @is_file($conf['init_scripts'].'/'.$conf['nginx']['php_fpm_init_script'])) system($conf['init_scripts'].'/'.$conf['nginx']['php_fpm_init_script'].' reload');
+			if($conf['nginx']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['nginx']['init_script'])) 				system($conf['init_scripts'].'/'.$conf['nginx']['init_script'].' reload');
+		}
+		if($conf['pureftpd']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['pureftpd']['init_script']))				system($conf['init_scripts'].'/'.$conf['pureftpd']['init_script'].' restart');
 	}
 	if($conf['services']['dns']) {
-		if($conf['mydns']['installed'] == true && $conf['mydns']['init_script'] != '' && is_file($conf['init_scripts'].'/'.$conf['mydns']['init_script']))					system($conf['init_scripts'].'/'.$conf['mydns']['init_script'].' restart &> /dev/null');
-		if($conf['powerdns']['installed'] == true && $conf['powerdns']['init_script'] != '' && is_file($conf['init_scripts'].'/'.$conf['powerdns']['init_script']))					system($conf['init_scripts'].'/'.$conf['powerdns']['init_script'].' restart &> /dev/null');
-		if($conf['bind']['installed'] == true && $conf['bind']['init_script'] != '' && is_file($conf['init_scripts'].'/'.$conf['bind']['init_script']))					system($conf['init_scripts'].'/'.$conf['bind']['init_script'].' restart &> /dev/null');
+		if($conf['mydns']['installed'] == true && $conf['mydns']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['mydns']['init_script']))					system($conf['init_scripts'].'/'.$conf['mydns']['init_script'].' restart &> /dev/null');
+		if($conf['powerdns']['installed'] == true && $conf['powerdns']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['powerdns']['init_script']))					system($conf['init_scripts'].'/'.$conf['powerdns']['init_script'].' restart &> /dev/null');
+		if($conf['bind']['installed'] == true && $conf['bind']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['bind']['init_script']))					system($conf['init_scripts'].'/'.$conf['bind']['init_script'].' restart &> /dev/null');
+	}
+	
+	if($conf['services']['proxy']) {
+		// if($conf['squid']['installed'] == true && $conf['squid']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['squid']['init_script']))					system($conf['init_scripts'].'/'.$conf['squid']['init_script'].' restart &> /dev/null');
+		if($conf['nginx']['installed'] == true && $conf['nginx']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['nginx']['init_script']))					system($conf['init_scripts'].'/'.$conf['nginx']['init_script'].' restart &> /dev/null');
+	}
+	
+	if($conf['services']['firewall']) {
+		if($conf['ufw']['installed'] == true && $conf['ufw']['init_script'] != '' && is_executable($conf['init_scripts'].'/'.$conf['ufw']['init_script']))					system($conf['init_scripts'].'/'.$conf['ufw']['init_script'].' restart &> /dev/null');
 	}
 }
 

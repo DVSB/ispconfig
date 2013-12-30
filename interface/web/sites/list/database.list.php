@@ -13,7 +13,11 @@
 
 
 // Name of the list
-$liste["name"] 				= "database";
+if($_SESSION['s']['user']['typ'] == 'admin') {
+	$liste["name"] 				= "database_admin";
+} else {
+	$liste["name"] 				= "database";
+}
 
 // Database table
 $liste["table"] 			= "web_database";
@@ -25,7 +29,7 @@ $liste["table_idx"]			= "database_id";
 $liste["search_prefix"] 	= "search_";
 
 // Records per page
-$liste["records_per_page"] 	= 15;
+$liste["records_per_page"] 	= "15";
 
 // Script File of the list
 $liste["file"]				= "database_list.php";
@@ -64,7 +68,36 @@ $liste["item"][] = array(	'field'		=> "remote_access",
 							'prefix'	=> "",
 							'suffix'	=> "",
 							'width'		=> "",
-							'value'		=> array('y' => "Yes",'n' => "No"));
+							'value'		=> array('y' => "<div id=\"ir-Yes\" class=\"swap\"><span>Yes</span></div>",'n' => "<div class=\"swap\" id=\"ir-No\"><span>No</span></div>"));
+
+$liste["item"][] = array(	'field'		=> "type",
+							'datatype'	=> "VARCHAR",
+							'formtype'	=> "SELECT",
+							'op'		=> "=",
+							'prefix'	=> "",
+							'suffix'	=> "",
+							'width'		=> "",
+							'value'		=> array(
+							                  'mongo' => "MongoDB",
+							                  'mysql' => "MySQL"
+							               )
+						);
+
+if($_SESSION['s']['user']['typ'] == 'admin') {
+$liste["item"][] = array(	'field'		=> "sys_groupid",
+							'datatype'	=> "INTEGER",
+							'formtype'	=> "SELECT",
+							'op'		=> "=",
+							'prefix'	=> "",
+							'suffix'	=> "",
+							'datasource'	=> array ( 	'type'	=> 'SQL',
+														'querystring' => 'SELECT groupid, name FROM sys_group WHERE groupid != 1 ORDER BY name',
+														'keyfield'=> 'groupid',
+														'valuefield'=> 'name'
+									 				  ),
+							'width'		=> "",
+							'value'		=> "");
+}
 
 $liste["item"][] = array(	'field'		=> "server_id",
 							'datatype'	=> "VARCHAR",
@@ -79,15 +112,45 @@ $liste["item"][] = array(	'field'		=> "server_id",
 									 				  ),
 							'width'		=> "",
 							'value'		=> "");
-
-$liste["item"][] = array(	'field'		=> "database_name",
+							
+$liste["item"][] = array(	'field'		=> "parent_domain_id",
 							'datatype'	=> "VARCHAR",
-							'formtype'	=> "TEXT",
-							'op'		=> "like",
-							'prefix'	=> "%",
-							'suffix'	=> "%",
+                            'filters'   => array( 0 => array( 'event' => 'SHOW',
+                                                              'type' => 'IDNTOUTF8')
+                                                ),
+							'formtype'	=> "SELECT",
+							'op'		=> "=",
+							'prefix'	=> "",
+							'suffix'	=> "",
+							'datasource'	=> array ( 	'type'	=> 'SQL',
+										'querystring' => "SELECT domain_id,domain FROM web_domain WHERE type = 'vhost' AND {AUTHSQL} ORDER BY domain",
+										'keyfield'=> 'domain_id',
+										'valuefield'=> 'domain'
+									 ),
 							'width'		=> "",
 							'value'		=> "");
 
+$liste["item"][] = array(	'field'		=> "database_user_id",
+							'datatype'	=> "INTEGER",
+							'formtype'	=> "SELECT",
+							'op'		=> "=",
+							'prefix'	=> "",
+							'suffix'	=> "",
+							'datasource'	=> array ( 	'type'	=> 'SQL',
+														'querystring' => 'SELECT database_user_id, database_user FROM web_database_user WHERE {AUTHSQL} ORDER BY database_user',
+														'keyfield'=> 'database_user_id',
+														'valuefield'=> 'database_user'
+									 				  ),
+							'width'		=> "",
+							'value'		=> "");
+
+$liste["item"][] = array(    'field'        => "database_name",
+                            'datatype'    => "VARCHAR",
+                            'formtype'    => "TEXT",
+                            'op'        => "like",
+                            'prefix'    => "%",
+                            'suffix'    => "%",
+                            'width'        => "",
+                            'value'        => "");
 
 ?>

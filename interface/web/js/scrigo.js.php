@@ -1,70 +1,162 @@
 <?php
 	session_start();
 	include('../../lib/config.inc.php');
-	include_once(ISPC_ROOT_PATH.'/web/strengthmeter/lib/lang/'.$_SESSION['s']['language'].'_strengthmeter.lng');
+    header('Content-Type: text/javascript; charset=utf-8'); // the config file sets the content type header so we have to override it here!
+	require_once('../../lib/app.inc.php');
+	$lang = (isset($_SESSION['s']['language']) && $_SESSION['s']['language'] != '')?$_SESSION['s']['language']:'en';
+	include_once(ISPC_ROOT_PATH.'/web/strengthmeter/lib/lang/'.$lang.'_strengthmeter.lng');
+	
+	$app->uses('ini_parser,getconf');
+	$server_config_array = $app->getconf->get_global_config();
 ?>
-
+var pageFormChanged = false;
+var tabChangeWarningTxt = '';
+var tabChangeDiscardTxt = '';
+var tabChangeWarning = false;
+var tabChangeDiscard = false;
+var requestsRunning = 0;
+var indicatorPaddingH = -1;
+var indicatorPaddingW = -1;
+var indicatorCompleted = false;
+var registeredHooks = new Array();
 redirect = '';
 
+function reportError(request) {
+	/* Error reporting is disabled by default as some browsers like safari 
+	   sometimes throw errors when a ajax request is delayed even if the 
+	   ajax request worked. */
+	   
+	/*alert(request);*/
+}
+
+function registerHook(name, callback) {
+    if(!registeredHooks[name]) registeredHooks[name] = new Array();
+    var newindex = registeredHooks[name].length;
+    registeredHooks[name][newindex] = callback;
+}
+
+function callHook(name, params) {
+    if(!registeredHooks[name]) return;
+    for(var i = 0; i < registeredHooks[name].length; i++) {
+        var callback = registeredHooks[name][i];
+        callback(name, params);
+    }
+}
+
+function resetFormChanged() {
+    pageFormChanged = false;
+}
+
+function showLoadIndicator() {
+    document.body.style.cursor = 'wait';
+
+<?php
+if($server_config_array['misc']['use_loadindicator'] == 'y'){
+?>
+    requestsRunning += 1;
+    
+    if(requestsRunning < 2) {
+        var indicator = jQuery('#ajaxloader');
+        if(indicator.length < 1) {
+            indicator = jQuery('<div id="ajaxloader" style="display: none;"></div>');
+            indicator.appendTo('body');
+        }
+        var parent = jQuery('#content');
+        if(parent.length < 1) return;
+        indicatorCompleted = false;
+        
+        var atx = parent.offset().left + 150; //((parent.outerWidth(true) - indicator.outerWidth(true)) / 2);
+        var aty = parent.offset().top + 150;
+        indicator.css( {'left': atx, 'top': aty } ).fadeIn('fast', function() {
+            // check if loader should be hidden immediately
+            indicatorCompleted = true;
+            if(requestsRunning < 1) $(this).fadeOut('fast', function() { $(this).hide();});
+        });
+    }
+<?php
+}
+?>
+}
+
+function hideLoadIndicator() {
+    document.body.style.cursor = '';
+
+    requestsRunning -= 1;
+    if(requestsRunning < 1) {
+        requestsRunning = 0; // just for the case...
+        if(indicatorCompleted == true) jQuery('#ajaxloader').fadeOut('fast', function() { jQuery('#ajaxloader').hide(); } );
+    }
+}
+
+function onAfterContentLoad(url, data) {
+    if(!data) data = '';
+    else data = '&' + data;
+<?php
+if($server_config_array['misc']['use_combobox'] == 'y'){
+?>
+    $('#pageContent').find("select").combobox();
+<?php
+}
+?>
+    callHook('onAfterContentLoad', {'url': url, 'data': data });
+}
+
 function loadContentRefresh(pagename) {
-	var pageContentCallbackRefresh = {
-		success: function(o) {
-			document.getElementById('pageContent').innerHTML = o.responseText;
-		},
-		failure: function(o) {
-			alert('Ajax Request was not successful.'+pagename);
-		}
-	}
 	
   if(document.getElementById('refreshinterval').value > 0) {
-  	var pageContentObject2 = YAHOO.util.Connect.asyncRequest('GET', pagename+"&refresh="+document.getElementById('refreshinterval').value, pageContentCallbackRefresh);
+	var pageContentObject2 = jQuery.ajax({	type: "GET", 
+											url: pagename,
+											data: "refresh="+document.getElementById('refreshinterval').value,
+											dataType: "html",
+											beforeSend: function() {
+												showLoadIndicator();
+											},
+											success: function(data, textStatus, jqXHR) {
+                                                hideLoadIndicator();
+												jQuery('#pageContent').html(jqXHR.responseText);
+                                                onAfterContentLoad(pagename, "refresh="+document.getElementById('refreshinterval').value);
+                                                pageFormChanged = false;
+											},
+											error: function() {
+                                                hideLoadIndicator();
+												reportError('Ajax Request was not successful.'+pagename);
+											}
+										});
   	setTimeout( "loadContentRefresh('"+pagename+"&refresh="+document.getElementById('refreshinterval').value+"')", document.getElementById('refreshinterval').value*1000 );
   }
 }
 
-function capp(module) {
-	var cappCallback = {
-		success: function(o) {
-			if(o.responseText != '') {
-				if(o.responseText.indexOf('HEADER_REDIRECT:') > -1) {
-					var parts = o.responseText.split(':');
-					loadContent(parts[1]);
-				} else {
-					alert(o.responseText);
-				}
-			}
-			loadMenus();
-		},
-		failure: function(o) {
-			alert('Ajax Request was not successful.');
-		}
-	}
-	var submitFormObj = YAHOO.util.Connect.asyncRequest('GET', 'capp.php?mod='+module, cappCallback);
+function capp(module, redirect) {
+	var submitFormObj = jQuery.ajax({		type: "GET", 
+											url: "capp.php", 
+											data: "mod="+module+((redirect != undefined) ? '&redirect='+redirect : ''),
+											dataType: "html",
+											beforeSend: function() {
+												showLoadIndicator();
+											},
+											success: function(data, textStatus, jqXHR) {
+												if(jqXHR.responseText != '') {
+													if(jqXHR.responseText.indexOf('HEADER_REDIRECT:') > -1) {
+														var parts = jqXHR.responseText.split(':');
+														loadContent(parts[1]);
+													} else if (jqXHR.responseText.indexOf('URL_REDIRECT:') > -1) {
+														var newUrl= jqXHR.responseText.substr(jqXHR.responseText.indexOf('URL_REDIRECT:') + "URL_REDIRECT:".length);
+														document.location.href = newUrl;
+													} else {
+														//alert(jqXHR.responseText);
+													}
+												}
+												loadMenus();
+                                                hideLoadIndicator();
+											},
+											error: function() {
+                                                hideLoadIndicator();
+												reportError('Ajax Request was not successful.'+module);
+											}
+									});
 }
 
 function submitLoginForm(formname) {
-	
-	var submitFormCallback = {
-		success: function(o) {
-			if(o.responseText.indexOf('HEADER_REDIRECT:') > -1) {
-				var parts = o.responseText.split(':');
-				//alert(parts[1]);
-				loadContent(parts[1]);
-				//redirect = parts[1];
-				//window.setTimeout('loadContent(redirect)', 1000);
-			} else if (o.responseText.indexOf('LOGIN_REDIRECT:') > -1) {
-				// Go to the login page
-				document.location.href = 'index.php';
-			} else {
-				document.getElementById('pageContent').innerHTML = o.responseText;
-			}
-			loadMenus();
-		},
-		failure: function(o) {
-			alert('Ajax Request was not successful.');
-		}
-	}
-	
     //* Validate form. TODO: username and password with strip();
     var frm = document.getElementById(formname);
     var userNameObj = frm.username;
@@ -76,9 +168,42 @@ function submitLoginForm(formname) {
     if(passwordObj.value == ''){
         passwordObj.focus();
         return;
-    }   
-	YAHOO.util.Connect.setForm(formname);
-	var submitFormObj = YAHOO.util.Connect.asyncRequest('POST', 'content.php', submitFormCallback);
+    }
+	
+	$('#dummy_username').val(userNameObj.value);
+	$('#dummy_passwort').val(passwordObj.value);
+	$('#dummy_login_form').submit();
+
+	var submitFormObj = jQuery.ajax({		type: "POST", 
+											url: "content.php",
+											data: jQuery('#'+formname).serialize(),
+											dataType: "html",
+											beforeSend: function() {
+												showLoadIndicator();
+											},
+											success: function(data, textStatus, jqXHR) {
+												if(jqXHR.responseText.indexOf('HEADER_REDIRECT:') > -1) {
+													var parts = jqXHR.responseText.split(':');
+													//alert(parts[1]);
+													loadContent(parts[1]);
+													//redirect = parts[1];
+													//window.setTimeout('loadContent(redirect)', 1000);
+												} else if (jqXHR.responseText.indexOf('LOGIN_REDIRECT:') > -1) {
+													// Go to the login page
+													document.location.href = 'index.php';
+												} else {
+													jQuery('#pageContent').html(jqXHR.responseText);
+                                                    onAfterContentLoad('content.php', jQuery('#'+formname).serialize());
+                                                    pageFormChanged = false;
+												}
+												loadMenus();
+                                                hideLoadIndicator();
+											},
+											error: function() {
+                                                hideLoadIndicator();
+												reportError('Ajax Request was not successful.110');
+											}
+									});
 	/*
 	if(redirect != '') {
 		loadContent(redirect);
@@ -90,27 +215,33 @@ function submitLoginForm(formname) {
 }
 
 function submitForm(formname,target) {
-	
-	var submitFormCallback = {
-		success: function(o) {
-			if(o.responseText.indexOf('HEADER_REDIRECT:') > -1) {
-				var parts = o.responseText.split(':');
-				//alert(parts[1]);
-				loadContent(parts[1]);
-				//redirect = parts[1];
-				//window.setTimeout('loadContent(redirect)', 1000);
-			} else {
-				document.getElementById('pageContent').innerHTML = o.responseText;
-			}
-		},
-		failure: function(o) {
-			var parts = o.responseText.split(':');
-			alert('Ajax Request was not successful. '+parts[1]);
-		}
-	}
-	
-	YAHOO.util.Connect.setForm(formname);
-	var submitFormObj = YAHOO.util.Connect.asyncRequest('POST', target, submitFormCallback);
+	var submitFormObj = jQuery.ajax({		type: "POST", 
+											url: target,
+											data: jQuery('#'+formname).serialize(),
+											dataType: "html",
+											beforeSend: function() {
+												showLoadIndicator();
+											},
+											success: function(data, textStatus, jqXHR) {
+												if(jqXHR.responseText.indexOf('HEADER_REDIRECT:') > -1) {
+													var parts = jqXHR.responseText.split(':');
+													//alert(parts[1]);
+													loadContent(parts[1]);
+													//redirect = parts[1];
+													//window.setTimeout('loadContent(redirect)', 1000);
+												} else {
+													jQuery('#pageContent').html(jqXHR.responseText);
+                                                    onAfterContentLoad(target, jQuery('#'+formname).serialize());
+                                                    pageFormChanged = false;
+												}
+                                                hideLoadIndicator();
+											},
+											error: function(jqXHR, textStatus, errorThrown) {
+                                                hideLoadIndicator();
+												var parts = jqXHR.responseText.split(':');
+												reportError('Ajax Request was not successful. 111');
+											}
+									});
 	/*
 	if(redirect != '') {
 		loadContent(redirect);
@@ -119,38 +250,73 @@ function submitForm(formname,target) {
 	*/
 }
 
-function submitUploadForm(formname,target) {
-	
-	var submitFormCallback = {
-		success: function(o) {
-			if(o.responseText.indexOf('HEADER_REDIRECT:') > -1) {
-				var parts = o.responseText.split(':');
-				//alert(parts[1]);
-				loadContent(parts[1]);
-				//redirect = parts[1];
-				//window.setTimeout('loadContent(redirect)', 1000);
-			} else {
-				document.getElementById('pageContent').innerHTML = o.responseText;
-			}
-		},
-		upload: function(o) {
-        	if(o.responseText.indexOf('HEADER_REDIRECT:') > -1) {
-				var parts = o.responseText.split(':');
-				//alert(parts[1]);
-				loadContent(parts[1]);
-				//redirect = parts[1];
-				//window.setTimeout('loadContent(redirect)', 1000);
-			} else {
-				document.getElementById('pageContent').innerHTML = o.responseText;
-			}
-        },
-		failure: function(o) {
-			alert('Ajax Request was not successful. 1');
-		}
+function submitFormConfirm(formname,target,confirmation) {
+	var successMessage = arguments[3];
+	if(window.confirm(confirmation)) {
+		var submitFormObj = jQuery.ajax({	type: "POST", 
+											url: target,
+											data: jQuery('#'+formname).serialize(),
+											dataType: "html",
+											beforeSend: function() {
+												showLoadIndicator();
+											},
+											success: function(data, textStatus, jqXHR) {
+												if(successMessage) alert(successMessage);
+												if(jqXHR.responseText.indexOf('HEADER_REDIRECT:') > -1) {
+													var parts = jqXHR.responseText.split(':');
+													//alert(parts[1]);
+													loadContent(parts[1]);
+													//redirect = parts[1];
+													//window.setTimeout('loadContent(redirect)', 1000);
+												} else {
+													jQuery('#pageContent').html(jqXHR.responseText);
+                                                    onAfterContentLoad(target, jQuery('#'+formname).serialize());
+                                                    pageFormChanged = false;
+												}
+                                                hideLoadIndicator();
+											},
+											error: function(jqXHR, textStatus, errorThrown) {
+                                                hideLoadIndicator();
+												var parts = jqXHR.responseText.split(':');
+												reportError('Ajax Request was not successful. 111');
+											}
+									});
 	}
+}
+
+function submitUploadForm(formname,target) {		
+	var handleResponse = function(loadedFrame) {
+		var response, responseStr = loadedFrame.contentWindow.document.body.innerHTML;
+		
+		try {
+			response = JSON.parse(responseStr);
+		} catch(e) {
+			response = responseStr;
+		}
+		var msg = '';
+		var okmsg = jQuery('#OKMsg',response).html();
+		if(okmsg){
+			msg = '<div id="OKMsg">'+okmsg+'</div>';
+		}
+		var errormsg = jQuery('#errorMsg',response).html();
+		if(errormsg){
+			msg = msg+'<div id="errorMsg">'+errormsg+'</div>';
+		}
+		return msg;
+		
+    };
 	
-	YAHOO.util.Connect.setForm(formname,true);
-	var submitFormObj = YAHOO.util.Connect.asyncRequest('POST', target, submitFormCallback);
+	var frame_id = 'ajaxUploader-iframe-' + Math.round(new Date().getTime() / 1000);
+	jQuery('body').after('<iframe width="0" height="0" style="display:none;" name="'+frame_id+'" id="'+frame_id+'"/>');
+	jQuery('input[type="file"]').closest("form").attr({target: frame_id, action: target}).submit();
+	jQuery('#'+frame_id).load(function() {
+        var msg = handleResponse(this);
+		jQuery('#errorMsg').remove();
+		jQuery('#OKMsg').remove();
+		jQuery('input[name="id"]').before(msg);
+		jQuery(this).remove();
+      });
+
 	/*
 	if(redirect != '') {
 		loadContent(redirect);
@@ -160,58 +326,65 @@ function submitUploadForm(formname,target) {
 }
 
 function loadContent(pagename) {
-	var pageContentCallback2 = {
-		success: function(o) {
-			if(o.responseText.indexOf('HEADER_REDIRECT:') > -1) {
-				var parts = o.responseText.split(':');
-				loadContent(parts[1]);
-			} else if (o.responseText.indexOf('URL_REDIRECT:') > -1) {
-				var newUrl= o.responseText.substr(o.responseText.indexOf('URL_REDIRECT:') + "URL_REDIRECT:".length);
-				document.location.href = newUrl;
-			} else {
-				document.getElementById('pageContent').innerHTML = o.responseText;
-			}
-		},
-		failure: function(o) {
-			alert('Ajax Request was not successful.');
-		}
-	}
-	
-
-  var pageContentObject2 = YAHOO.util.Connect.asyncRequest('GET', pagename, pageContentCallback2);
+  var params = arguments[1];
+  var pageContentObject2 = jQuery.ajax({	type: "GET", 
+											url: pagename,
+                                            data: (params ? params : null),
+											dataType: "html",
+											beforeSend: function() {
+												showLoadIndicator();
+											},
+											success: function(data, textStatus, jqXHR) {
+												if(jqXHR.responseText.indexOf('HEADER_REDIRECT:') > -1) {
+													var parts = jqXHR.responseText.split(':');
+													loadContent(parts[1]);
+												} else if (jqXHR.responseText.indexOf('URL_REDIRECT:') > -1) {
+													var newUrl= jqXHR.responseText.substr(jqXHR.responseText.indexOf('URL_REDIRECT:') + "URL_REDIRECT:".length);
+													document.location.href = newUrl;
+												} else {
+													//document.getElementById('pageContent').innerHTML = jqXHR.responseText;
+													//var reponse = jQuery(jqXHR.responseText);
+													//var reponseScript = reponse.filter("script");
+													//jQuery.each(reponseScript, function(idx, val) { eval(val.text); } );
+													
+													jQuery('#pageContent').html(jqXHR.responseText);
+                                                    onAfterContentLoad(pagename, (params ? params : null));
+                                                    pageFormChanged = false;
+												}
+                                                hideLoadIndicator();
+											},
+											error: function() {
+                                                hideLoadIndicator();
+												reportError('Ajax Request was not successful. 113');
+											}
+									});
 }
 
 
 function loadInitContent() {
-
-  var pageContentCallback = {
-		success: function(o) {
-			if(o.responseText.indexOf('HEADER_REDIRECT:') > -1) {
-				var parts = o.responseText.split(":");
-				loadContent(parts[1]);
-			} else {
-				document.getElementById('pageContent').innerHTML = o.responseText;
-			}
-			
-			/*
-			var items = document.getElementsByTagName('input');
-			for(i=0;i<items.length;i++) {
-				//var oButton = new YAHOO.widget.Button(items[i].id);
-				if(items[i].type == 'button') {
-					//alert(items[i].id);
-					var oButton = new YAHOO.widget.Button(items[i].id);
-					oButton.addListener("click",submitLoginForm);
-				}
-			}
-			//var oButton = new YAHOO.widget.Button("submit");
-			*/
-		},
-		failure: function(o) {
-			alert('Ajax Request was not successful.');
-		}
-	}
-	
-  var pageContentObject = YAHOO.util.Connect.asyncRequest('GET', 'content.php?s_mod=login&s_pg=index', pageContentCallback);
+	var pageContentObject = jQuery.ajax({	type: "GET", 
+											url: "content.php",
+											data: "s_mod=login&s_pg=index",
+											dataType: "html",
+											beforeSend: function() {
+												showLoadIndicator();
+											},
+											success: function(data, textStatus, jqXHR) {
+												if(jqXHR.responseText.indexOf('HEADER_REDIRECT:') > -1) {
+													var parts = jqXHR.responseText.split(":");
+													loadContent(parts[1]);
+												} else {
+													jQuery('#pageContent').html(jqXHR.responseText);
+                                                    onAfterContentLoad('content.php', "s_mod=login&s_pg=index");
+                                                    pageFormChanged = false;
+												}
+                                                hideLoadIndicator();
+											},
+											error: function() {
+                                                hideLoadIndicator();
+												reportError('Ajax Request was not successful. 114');
+											}
+										});
   
   loadMenus();
   keepalive();
@@ -220,66 +393,79 @@ function loadInitContent() {
 }
 
 function setFocus() {
-/*
-	var flag=false;
-		for(z=0;z<document.forms.length;z++) {
-			var form = document.forms[z];
-			var elements = form.elements;
-			for (var i=0;i<elements.length;i++) {
-				var element = elements[i];
-				if(element.type == 'text' &&
-					!element.readOnly &&
-					!element.disabled) {
-						element.focus();
-						flag=true;
-						break;
-					}
-			}
-			if(flag)break;
-		}
-*/
-  document.pageForm.username.focus();
+	try {
+		jQuery('form#pageForm').find('input[name="username"]').focus();
+	} catch (e) {
+	}
 }
 
 
 function loadMenus() {
+  var sideNavObject = jQuery.ajax({			type: "GET", 
+											url: "nav.php",
+											data: "nav=side",
+											dataType: "html",
+											beforeSend: function() {
+												showLoadIndicator();
+											},
+											success: function(data, textStatus, jqXHR) {
+                                                hideLoadIndicator();
+												jQuery('#sideNav').html(jqXHR.responseText);
+											},
+											error: function() {
+                                                hideLoadIndicator();
+												reportError('Ajax Request was not successful. 115');
+											}
+									});
 	
-	var sideNavCallback = {
-		success: function(o) {
-			document.getElementById('sideNav').innerHTML = o.responseText;
-		},
-		failure: function(o) {
-			alert('Ajax Request was not successful.');
-		}
-	}
-	
-  var sideNavObject = YAHOO.util.Connect.asyncRequest('GET', 'nav.php?nav=side', sideNavCallback);
-	
-	var topNavCallback = {
-		success: function(o) {
-			document.getElementById('topNav').innerHTML = o.responseText;
-		},
-		failure: function(o) {
-			alert('Ajax Request was not successful.');
-		}
-	}
-	
-  var topNavObject = YAHOO.util.Connect.asyncRequest('GET', 'nav.php?nav=top', topNavCallback);
+  var topNavObject = jQuery.ajax({			type: "GET", 
+											url: "nav.php",
+											data: "nav=top",
+											dataType: "html",
+											beforeSend: function() {
+												showLoadIndicator();
+											},
+											success: function(data, textStatus, jqXHR) {
+                                                hideLoadIndicator();
+												jQuery('#topNav').html(jqXHR.responseText);
+											},
+											error: function(o) {
+                                                hideLoadIndicator();
+												reportError('Ajax Request was not successful. 116');
+											}
+								});
 
 }
 
-function changeTab(tab,target) {
+function changeTab(tab,target,force) {
 	//document.forms[0].next_tab.value = tab;
 	document.pageForm.next_tab.value = tab;
-	submitForm('pageForm',target);
+    
+    var idel = jQuery('form#pageForm').find('[name="id"]');
+    var id = null;
+    if(idel.length > 0) id = idel.val();
+    if(tabChangeDiscard == 'y' && !force) {
+        if((idel.length < 1 || id) && (pageFormChanged == false || window.confirm(tabChangeDiscardTxt))) {
+            var next_tab = tab;
+            if(id) loadContent(target, {'next_tab': next_tab, 'id': id});
+            else loadContent(target, {'next_tab': next_tab});
+        } else {
+            return false;
+        }
+    } else {
+        if(id && tabChangeWarning == 'y' && pageFormChanged == true) {
+            if(window.confirm(tabChangeWarningTxt)) {
+                submitForm('pageForm', target);
+            } else {
+                var next_tab = tab;
+                if(id) loadContent(target, {'next_tab': next_tab, 'id': id});
+                else loadContent(target, {'next_tab': next_tab});
+            }
+        } else {
+            submitForm('pageForm',target);
+        }
+    }
 }
-
-
-
-function reportError(request)
-	{
-		alert('Sorry. There was an error.');
-	}
 	
 function del_record(link,confirmation) {
   if(window.confirm(confirmation)) {
@@ -287,53 +473,69 @@ function del_record(link,confirmation) {
   }
 }
 
-function loadContentInto(elementid,pagename) {
-	var itemContentCallback = {
-		success: function(o) {
-			document.getElementById(elementid).innerHTML = o.responseText;
-		},
-		failure: function(o) {
-			alert('Ajax Request was not successful.');
-		}
-	}
-	
+function confirm_action(link,confirmation) {
+  if(window.confirm(confirmation)) {
+          loadContent(link);
+  }
+}
 
-  var pageContentObject2 = YAHOO.util.Connect.asyncRequest('GET', pagename, itemContentCallback);
+function loadContentInto(elementid,pagename) {
+  var pageContentObject2 = jQuery.ajax({	type: "GET", 
+											url: pagename,
+											dataType: "html",
+											beforeSend: function() {
+//												showLoadIndicator();
+											},
+											success: function(data, textStatus, jqXHR) {
+//                                                hideLoadIndicator();
+												jQuery('#'+elementid).html(jqXHR.responseText);
+											},
+											error: function() {
+//                                                hideLoadIndicator();
+												reportError('Ajax Request was not successful. 118');
+											}
+										});
 }
 
 function loadOptionInto(elementid,pagename) {
-	var itemContentCallback = {
-		success: function(o) {
-			var teste = o.responseText;
-			var elemente = teste.split('#');
-			el=document.getElementById(elementid);
-			el.innerHTML='';
-			for (var i = 0; i < elemente.length; ++i){
+	var pageContentObject2 = jQuery.ajax({	type: "GET", 
+											url: pagename,
+											dataType: "html",
+											beforeSend: function() {
+//												showLoadIndicator();
+											},
+											success: function(data, textStatus, jqXHR) {
+//                                                hideLoadIndicator();
+												var teste = jqXHR.responseText;
+												var elemente = teste.split('#');
+												el=document.getElementById(elementid);
+												el.innerHTML='';
+												for (var i = 0; i < elemente.length; ++i){
 
-				var foo2 = document.createElement("option");
-				foo2.appendChild(document.createTextNode(elemente[i]));
-				foo2.value=elemente[i];
-				el.appendChild(foo2);
-			}
-		},
-		failure: function(o) {
-		alert('Ajax Request was not successful.');
-		}
-	}
-	var pageContentObject2 = YAHOO.util.Connect.asyncRequest('GET', pagename, itemContentCallback);
+													var foo2 = document.createElement("option");
+													foo2.appendChild(document.createTextNode(elemente[i]));
+													foo2.value=elemente[i];
+													el.appendChild(foo2);
+												}
+											},
+											error: function() {
+//                                                hideLoadIndicator();
+												reportError('Ajax Request was not successful. 119');
+											}
+										});
 }
 
 function keepalive() {
-	var pageContentCallbackKeepalive = {
-		success: function(o) {
-			setTimeout( keepalive, 1000000 );
-		},
-		failure: function(o) {
-			alert('Sorry. There was an error.');
-		}
-	}
-	
-  	var pageContentObject3 = YAHOO.util.Connect.asyncRequest('GET', 'keepalive.php', pageContentCallbackKeepalive);
+	var pageContentObject3 = jQuery.ajax({	type: "GET", 
+											url: "keepalive.php",
+											dataType: "html",
+											success: function(data, textStatus, jqXHR) {
+												setTimeout( keepalive, 1000000 );
+											},
+											error: function() {
+												reportError('Session expired. Please login again.');
+											}
+										});
   	//setTimeout( keepalive, 1000000 );
 }
 
@@ -458,43 +660,185 @@ function pass_contains(pass, check) {
 	return false;
 }
 
+var new_tpl_add_id = 0;
 function addAdditionalTemplate(){
-	var tpl_add = document.getElementById('template_additional').value;
-	
-	  var tpl_list = document.getElementById('template_additional_list').innerHTML;
-	  var addTemplate = document.getElementById('tpl_add_select').value.split('|',2);
-	  var addTplId = addTemplate[0];
-	  var addTplText = addTemplate[1];
+    var tpl_add = jQuery('#template_additional').val();
+    var addTemplate = jQuery('#tpl_add_select').val().split('|',2);
+	var addTplId = addTemplate[0];
+	var addTplText = addTemplate[1];
 	if(addTplId > 0) {
-	  var newVal = tpl_add + '/' + addTplId + '/';
-	  newVal = newVal.replace('//', '/');
-	  var newList = tpl_list + '<br>' + addTplText;
-	  newList = newList.replace('<br><br>', '<br>');
-	  document.getElementById('template_additional').value = newVal;
-	  document.getElementById('template_additional_list').innerHTML = newList;
-	  alert('additional template ' + addTplText + ' added to customer');
+        var newVal = tpl_add.split('/');
+        new_tpl_add_id += 1;
+        var delbtn = jQuery('<a href="#"></a>').attr('class', 'button icons16 icoDelete').click(function(e) {
+            e.preventDefault();
+            delAdditionalTemplate($(this).parent().attr('rel'));
+        });
+        newVal[newVal.length] = 'n' + new_tpl_add_id + ':' + addTplId;
+	    jQuery('<li>' + addTplText + '</li>').attr('rel', 'n' + new_tpl_add_id).append(delbtn).appendTo('#template_additional_list ul');
+	    jQuery('#template_additional').val(newVal.join('/'));
+	    alert('additional template ' + addTplText + ' added to customer');
 	} else {
-	  alert('no additional template selcted');
+	    alert('no additional template selcted');
 	}
 }
 
-function delAdditionalTemplate(){
-	var tpl_add = document.getElementById('template_additional').value;
-	if(tpl_add != '') {
-		var tpl_list = document.getElementById('template_additional_list').innerHTML;
+function delAdditionalTemplate(tpl_id){
+    var tpl_add = jQuery('#template_additional').val();
+	if(tpl_id) {
+        // new style
+		var $el = jQuery('#template_additional_list ul').find('li[rel="' + tpl_id + '"]').eq(0); // only the first
+        var addTplText = $el.text();
+        $el.remove();
+        
+		var oldVal = tpl_add.split('/');
+		var newVal = new Array();
+        for(var i = 0; i < oldVal.length; i++) {
+            var tmp = oldVal[i].split(':', 2);
+            if(tmp.length == 2 && tmp[0] == tpl_id) continue;
+            newVal[newVal.length] = oldVal[i];
+        }
+        jQuery('#template_additional').val(newVal.join('/'));
+		alert('additional template ' + addTplText + ' deleted from customer');
+    } else if(tpl_add != '') {
+        // old style
 		var addTemplate = document.getElementById('tpl_add_select').value.split('|',2);
 		var addTplId = addTemplate[0];
 		var addTplText = addTemplate[1];
+
+		jQuery('#template_additional_list ul').find('li:not([rel])').each(function() {
+            var text = jQuery(this).text();
+            if(text == addTplText) {
+                jQuery(this).remove();
+                return false;
+            }
+            return this;
+        });
+        
 		var newVal = tpl_add;
-		newVal = newVal.replace(addTplId, '');
+        var repl = new RegExp('(^|\/)' + addTplId + '(\/|$)');
+		newVal = newVal.replace(repl, '');
 		newVal = newVal.replace('//', '/');
-		var newList = tpl_list.replace(addTplText, '');
-		newList = newList.replace('<br><br>', '<br>');
-		document.getElementById('template_additional').value = newVal;
-		document.getElementById('template_additional_list').innerHTML = newList;
+		jQuery('#template_additional').val(newVal);
 		alert('additional template ' + addTplText + ' deleted from customer');
   } else {
   	alert('no additional template selcted');
   }
   
 }
+
+function getInternetExplorerVersion() {
+    var rv = -1; // Return value assumes failure.
+    if (navigator.appName == 'Microsoft Internet Explorer') {
+        var ua = navigator.userAgent;
+        var re = new RegExp("MSIE ([0-9]{1,}[\.0-9]{0,})");
+        if (re.exec(ua) != null)
+            rv = parseFloat(RegExp.$1);
+    }
+    return rv;
+}
+
+function password(minLength, special){
+	var iteration = 0;
+	var password = "";
+	var randomNumber;
+	minLength = minLength || 10;
+	var maxLength = minLength + 5;
+	var length = getRandomInt(minLength, maxLength);
+	if(special == undefined){
+		var special = false;
+	}
+	while(iteration < length){
+		randomNumber = (Math.floor((Math.random() * 100)) % 94) + 33;
+		if(!special){
+			if ((randomNumber >=33) && (randomNumber <=47)) { continue; }
+			if ((randomNumber >=58) && (randomNumber <=64)) { continue; }
+			if ((randomNumber >=91) && (randomNumber <=96)) { continue; }
+			if ((randomNumber >=123) && (randomNumber <=126)) { continue; }
+		}
+		iteration++;
+		password += String.fromCharCode(randomNumber);
+	}
+	return password;
+}
+
+function generatePassword(passwordFieldID, repeatPasswordFieldID){
+	var oldPWField = jQuery('#'+passwordFieldID);
+	var newPWField = oldPWField.clone();
+	newPWField.attr('type', 'text').attr('id', 'tmp'+passwordFieldID).insertBefore(oldPWField);
+	oldPWField.remove();
+	var pword = password(10, false);
+	jQuery('#'+repeatPasswordFieldID).val(pword);
+	newPWField.attr('id', passwordFieldID).val(pword).trigger('keyup');
+}
+
+var funcDisableClick = function(e) { e.preventDefault(); return false; };
+
+function checkPassMatch(pwField1,pwField2){
+    var rpass = jQuery('#'+pwField2).val();
+    var npass = jQuery('#'+pwField1).val();
+    if(npass!= rpass) {
+		jQuery('#confirmpasswordOK').hide();
+        jQuery('#confirmpasswordError').show();
+		jQuery('button.positive').attr('disabled','disabled');
+        jQuery('.tabbox_tabs ul li a').each(function() {
+            var $this = $(this);
+            $this.data('saved_onclick', $this.attr('onclick'));
+            $this.removeAttr('onclick');
+            $this.click(funcDisableClick);
+        });
+        return false;
+    } else {
+		jQuery('#confirmpasswordError').hide();
+        jQuery('#confirmpasswordOK').show();
+		jQuery('button.positive').removeAttr('disabled');
+		jQuery('.tabbox_tabs ul li a').each(function() {
+            var $this = $(this);
+            $this.unbind('click', funcDisableClick);
+            if($this.data('saved_onclick') && !$this.attr('onclick')) $this.attr('onclick', $this.data('saved_onclick'));
+        });
+    }
+}
+
+function getRandomInt(min, max){
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+jQuery('.addPlaceholder').live("click", function(){
+	var placeholderText = jQuery(this).text();
+	var template = jQuery(this).siblings(':input');
+	template.insertAtCaret(placeholderText);
+});
+
+jQuery('.addPlaceholderContent').live("click", function(){
+	var placeholderContentText = jQuery(this).find('.addPlaceholderContent').text();
+	var template2 = jQuery(this).siblings(':input');
+	template2.insertAtCaret(placeholderContentText);
+});
+		
+jQuery.fn.extend({
+	insertAtCaret: function(myValue){
+		return this.each(function(i) {
+			if (document.selection) {
+				//For browsers like Internet Explorer
+				this.focus();
+				sel = document.selection.createRange();
+				sel.text = myValue;
+				this.focus();
+			} else if (this.selectionStart || this.selectionStart == '0') {
+				//For browsers like Firefox and Webkit based
+				var startPos = this.selectionStart;
+				var endPos = this.selectionEnd;
+				var scrollTop = this.scrollTop;
+				this.value = this.value.substring(0, startPos)+myValue+this.value.substring(endPos,this.value.length);
+				this.focus();
+				this.selectionStart = startPos + myValue.length;
+				this.selectionEnd = startPos + myValue.length;
+				this.scrollTop = scrollTop;
+			} else {
+				this.value += myValue;
+				this.focus();
+			}
+		})
+	}
+});
+

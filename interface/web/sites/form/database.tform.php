@@ -30,6 +30,11 @@
 	The ID field of the database table is not part of the datafield definition.
 	The ID field must be always auto incement (int or bigint).
 
+	Search:
+	- searchable = 1 or searchable = 2 include the field in the search
+	- searchable = 1: this field will be the title of the search result
+	- searchable = 2: this field will be included in the description of the search result
+
 
 */
 
@@ -69,51 +74,70 @@ $form["tabs"]['database'] = array (
 									 ),
 			'value'		=> ''
 		),
+		'parent_domain_id' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'SELECT',
+			'default'	=> '',
+			'datasource'	=> array ( 	'type'	=> 'SQL',
+										'querystring' => "SELECT domain_id,domain FROM web_domain WHERE type = 'vhost' AND {AUTHSQL} ORDER BY domain",
+										'keyfield'=> 'domain_id',
+										'valuefield'=> 'domain'
+									 ),
+			'value'		=> array('0' => 'select_site_txt')
+		),
 		'type' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'SELECT',
 			'default'	=> 'y',
-			'value'		=> array('mysql' => 'MySQL')
+			'value'		=> array(
+			                  'mongo' => 'MongoDB',
+			                  'mysql' => 'MySQL'
+			               )
 		),
 		'database_name' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
 			'validators'	=> array ( 	0 => array (	'type'	=> 'NOTEMPTY',
 														'errmsg'=> 'database_name_error_empty'),
-										1 => array (	'type'	=> 'UNIQUE',
-														'errmsg'=> 'database_name_error_unique'),
-										2 => array (	'type'	=> 'REGEX',
+										1 => array (	'type'	=> 'REGEX',
 														'regex' => '/^[a-zA-Z0-9_]{2,64}$/',
 														'errmsg'=> 'database_name_error_regex'),
 									),
 			'default'	=> '',
 			'value'		=> '',
 			'width'		=> '30',
-			'maxlength'	=> '255'
+			'maxlength'	=> '255',
+			'searchable' => 1
 		),
-		'database_user' => array (
-			'datatype'	=> 'VARCHAR',
-			'formtype'	=> 'TEXT',
-			'validators'	=> array ( 	0 => array (	'type'	=> 'NOTEMPTY',
-														'errmsg'=> 'database_user_error_empty'),
-										1 => array (	'type'	=> 'UNIQUE',
-														'errmsg'=> 'database_user_error_unique'),
-										2 => array (	'type'	=> 'REGEX',
-														'regex' => '/^[a-zA-Z0-9_]{2,64}$/',
-														'errmsg'=> 'database_user_error_regex'),
-									),
-			'default'	=> '',
-			'value'		=> '',
-			'width'		=> '30',
-			'maxlength'	=> '255'
-		),
-		'database_password' => array (
+		'database_name_prefix' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
 			'default'	=> '',
 			'value'		=> '',
 			'width'		=> '30',
-			'maxlength'	=> '255'
+			'maxlength'	=> '25'
+		),
+		'database_user_id' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'SELECT',
+			'default'	=> '',
+			'datasource'	=> array ( 	'type'	=> 'SQL',
+										'querystring' => "SELECT database_user_id,database_user FROM web_database_user WHERE {AUTHSQL} ORDER BY database_user",
+										'keyfield'=> 'database_user_id',
+										'valuefield'=> 'database_user'
+									 ),
+			'value'		=> array('0' => 'select_dbuser_txt')
+		),
+		'database_ro_user_id' => array (
+			'datatype'	=> 'INTEGER',
+			'formtype'	=> 'SELECT',
+			'default'	=> '',
+			'datasource'	=> array ( 	'type'	=> 'SQL',
+										'querystring' => "SELECT database_user_id,database_user FROM web_database_user WHERE {AUTHSQL} ORDER BY database_user",
+										'keyfield'=> 'database_user_id',
+										'valuefield'=> 'database_user'
+									 ),
+			'value'		=> array('0' => 'no_dbuser_txt')
 		),
 		'database_charset' => array (
 			'datatype'	=> 'VARCHAR',
@@ -124,7 +148,7 @@ $form["tabs"]['database'] = array (
 		'remote_access' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'CHECKBOX',
-			'default'	=> 'y',
+			'default'	=> 'n',
 			'value'		=> array(0 => 'n',1 => 'y')
 		),
 		'active' => array (
@@ -143,7 +167,8 @@ $form["tabs"]['database'] = array (
 	                             ),
 	      'default' => '',
 	      'value'   => '',
-	      'width'   => '60'
+	      'width'   => '60',
+		  'searchable' => 2
 	    ),
 	##################################
 	# ENDE Datatable fields

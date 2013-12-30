@@ -46,6 +46,17 @@ require_once('../../lib/app.inc.php');
 $app->auth->check_module_permissions('sites');
 
 $app->uses("tform_actions");
-$app->tform_actions->onDelete();
+class page_action extends tform_actions {
+	function onBeforeDelete() {
+		global $app; $conf;
+		if($app->tform->checkPerm($this->id,'d') == false) $app->error($app->lng('error_no_delete_permission'));
+        
+        $app->uses('sites_database_plugin');
+        //$app->sites_database_plugin->processDatabaseDelete($this->id);
+	}
+}
+
+$page = new page_action;
+$page->onDelete();
 
 ?>

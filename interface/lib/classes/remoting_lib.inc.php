@@ -37,91 +37,52 @@ Copyright (c) Tri-Plex technology
 /**
 * Formularbehandlung
 *
-* Funktionen zur Umwandlung von Formulardaten
-* sowie zum vorbereiten von HTML und SQL
-* Ausgaben
+* Functions to validate, display and save form values
 *
-*        Tabellendefinition
+*        Database table field definitions
 *
-*        Datentypen:
-*        - INTEGER (Wandelt Ausdrücke in Int um)
+*        Datatypes:
+*        - INTEGER (Converts data to int automatically)
 *        - DOUBLE
-*        - CURRENCY (Formatiert Zahlen nach Währungsnotation)
-*        - VARCHAR (kein weiterer Format Check)
-*        - DATE (Datumsformat, Timestamp Umwandlung)
+*        - CURRENCY (Formats digits in currency notation)
+*        - VARCHAR (No format check)
+*        - DATE (Date format, converts from and to UNIX timestamps automatically)
 *
 *        Formtype:
-*        - TEXT (normales Textfeld)
-*        - PASSWORD (Feldinhalt wird nicht angezeigt)
-*        - SELECT (Gibt Werte als option Feld aus)
-*        - MULTIPLE (Select-Feld mit nehreren Werten)
+*        - TEXT (Normal text field)
+*        - PASSWORD (password field, the content will not be displayed again to the user)
+*        - SELECT (Option fiield)
+*        - MULTIPLE (Allows selection of multiple values)
 *
 *        VALUE:
-*        - Wert oder Array
+*        - Value or array
 *
 *        SEPARATOR
-*        - Trennzeichen für multiple Felder
+*        - separator char used for fileds with multiple values
 *
-*        Hinweis:
-*        Das ID-Feld ist nicht bei den Table Values einzufügen.
+*        Hint: The auto increment (ID) filed of the table has not be be definied separately.
+*
 */
-
-class remoting_lib {
+global $app;
+$app->load('tform_base');
+class remoting_lib extends tform_base {
 	
-        /**
-        * Definition of the database atble (array)
-        * @var tableDef
-        */
-        private $tableDef;
-
-        /**
-        * Private
-        * @var action
-        */
-        private $action;
-
-        /**
-        * Table name (String)
-        * @var table_name
-        */
-        private $table_name;
-
-        /**
-        * Debug Variable
-        * @var debug
-        */
-        private $debug = 0;
-
-        /**
-        * name of the primary field of the database table (string)
-        * @var table_index
-        */
-        var $table_index;
-
-        /**
-        * contains the error messages
-        * @var errorMessage
-        */
-        var $errorMessage = '';
-
-        var $dateformat = "d.m.Y";
-    	var $formDef = array();
-        var $wordbook;
-        var $module;
-        var $primary_id;
-		var $diffrec = array();
-		
+        
+		// additional class variables
 		var $sys_username;
 		var $sys_userid;
 		var $sys_default_group;
 		var $sys_groups;
+		var $client_id;
+		var $dataRecord;
 
 		
-		//* Load the form definition from file.
-    	function loadFormDef($file) {
+		//* Load the form definition from file. - special version for remoting
+        // module parameter is only for compatibility with base class
+    	function loadFormDef($file, $module = '') {
 			global $app,$conf;
             
-			include_once($file);
+			include($file);
 				
 			$this->formDef = $form;
 			unset($this->formDef['tabs']);
@@ -133,17 +94,29 @@ class remoting_lib {
 				}
 			}
 			unset($form);
+			
+			$this->dateformat = $app->lng('conf_format_dateshort');
 				
             return true;
         }
 		
 		//* Load the user profile
-		function loadUserProfile($client_id = 0) {
+		function loadUserProfile($client_id_param = 0) {
 			global $app,$conf;
-
-			$client_id = intval($client_id);
             
-			if($client_id == 0) {
+            $client_login = false;
+            if(isset($_SESSION['client_login']) && isset($_SESSION['client_sys_userid']) && $_SESSION['client_login'] == 1) {
+                $client_sys_userid = $app->functions->intval($_SESSION['client_sys_userid']);
+                
+                $client = $app->db->queryOneRecord("SELECT client.client_id FROM sys_user, client WHERE sys_user.client_id = client.client_id and sys_user.userid = " . $client_sys_userid);
+                
+                $this->client_id = $client['client_id'];
+                $client_login = true;
+            } else {
+                $this->client_id = $app->functions->intval($client_id_param);
+            }
+            
+			if($this->client_id == 0) {
 				$this->sys_username         = 'admin';
 				$this->sys_userid            = 1;
 				$this->sys_default_group     = 1;
@@ -161,436 +134,85 @@ class remoting_lib {
 						}
 				}*/
 				
-				$user = $app->db->queryOneRecord("SELECT * FROM sys_user WHERE client_id = $client_id");
+				$user = $app->db->queryOneRecord("SELECT * FROM sys_user WHERE client_id = $this->client_id");
 				$this->sys_username         = $user['username'];
 				$this->sys_userid            = $user['userid'];
 				$this->sys_default_group     = $user['default_group'];
 				$this->sys_groups             = $user['groups'];
-				$_SESSION["s"]["user"]["typ"] = $user['typ'];
+				// $_SESSION["s"]["user"]["typ"] = $user['typ'];
+				// we have to force admin priveliges for the remoting API as some function calls might fail otherwise.
+				if($client_login == false) $_SESSION["s"]["user"]["typ"] = 'admin';
 			}
+			
+			$_SESSION["s"]["user"]["username"] = $this->sys_username;
+			$_SESSION["s"]["user"]["userid"] = $this->sys_userid;
+			$_SESSION["s"]["user"]["default_group"] = $this->sys_default_group;
+			$_SESSION["s"]["user"]["groups"] = $this->sys_groups;
+			$_SESSION["s"]["user"]["client_id"] = $this->client_id;
 
 		return true;
 	    }  
 
 
         /**
-        * Converts data in human readable form
+        * Converts the data in the array to human readable format
+        * Datatype conversion e.g. to show the data in lists
+        * tab parameter is only there for compatibility with params of base class
         *
         * @param record
         * @return record
         */
-        function decode($record) {
-                $new_record = '';
-				if(is_array($record)) {
-                        foreach($this->formDef['fields'] as $key => $field) {
-                                switch ($field['datatype']) {
-                                case 'VARCHAR':
-                                        $new_record[$key] = stripslashes($record[$key]);
-                                break;
-
-                                case 'TEXT':
-                                        $new_record[$key] = stripslashes($record[$key]);
-                                break;
-
-                                case 'DATE':
-                                        if($record[$key] > 0) {
-                                                $new_record[$key] = date($this->dateformat,$record[$key]);
-                                        }
-                                break;
-
-                                case 'INTEGER':
-                                        $new_record[$key] = intval($record[$key]);
-                                break;
-
-                                case 'DOUBLE':
-                                        $new_record[$key] = $record[$key];
-                                break;
-
-                                case 'CURRENCY':
-                                        $new_record[$key] = number_format($record[$key], 2, ',', '');
-                                break;
-
-                                default:
-                                        $new_record[$key] = stripslashes($record[$key]);
-                                }
-                        }
-
-                }
-				
-        return $new_record;
+        function decode($record, $tab = '') {
+			    return $this->_decode($record, '', true);
         }
 
         /**
         * Get the key => value array of a form filled from a datasource definitiom
-        *
+        * dummy parameter is only there for compatibility with params of base class
+        * 
         * @param field = array with field definition
         * @param record = Dataset as array
         * @return key => value array for the value field of a form
         */
 
-        function getDatasourceData($field, $record) {
-                global $app;
-
-                $values = array();
-
-                if($field["datasource"]["type"] == 'SQL') {
-
-                        // Preparing SQL string. We will replace some
-                        // common placeholders
-                        $querystring = $field["datasource"]["querystring"];
-                        $querystring = str_replace("{USERID}",$this->sys_userid,$querystring);
-                        $querystring = str_replace("{GROUPID}",$this->sys_default_group,$querystring);
-                        $querystring = str_replace("{GROUPS}",$this->sys_groups,$querystring);
-                        $table_idx = $this->formDef['db_table_idx'];
-						
-						$tmp_recordid = (isset($record[$table_idx]))?$record[$table_idx]:0;
-                        $querystring = str_replace("{RECORDID}",$tmp_recordid,$querystring);
-						unset($tmp_recordid);
-						
-                        $querystring = str_replace("{AUTHSQL}",$this->getAuthSQL('r'),$querystring);
-
-                        // Getting the records
-                        $tmp_records = $app->db->queryAllRecords($querystring);
-                        if($app->db->errorMessage != '') die($app->db->errorMessage);
-                        if(is_array($tmp_records)) {
-                                $key_field = $field["datasource"]["keyfield"];
-                                $value_field = $field["datasource"]["valuefield"];
-                                foreach($tmp_records as $tmp_rec) {
-                                        $tmp_id = $tmp_rec[$key_field];
-                                        $values[$tmp_id] = $tmp_rec[$value_field];
-                                }
-                        }
-                }
-
-                if($field["datasource"]["type"] == 'CUSTOM') {
-                        // Calls a custom class to validate this record
-                        if($field["datasource"]['class'] != '' and $field["datasource"]['function'] != '') {
-                                $datasource_class = $field["datasource"]['class'];
-                                $datasource_function = $field["datasource"]['function'];
-                                $app->uses($datasource_class);
-                                $values = $app->$datasource_class->$datasource_function($field, $record);
-                        } else {
-                                $this->errorMessage .= "Custom datasource class or function is empty<br>\r\n";
-                        }
-                }
-
-                return $values;
-
+        function getDatasourceData($field, $record, $dummy = '') {
+			return $this->_getDatasourceData($field, $record, true);
         }
 
         /**
-        * Converts the data in a format to store it in the database table
-        *
+        /**
+        * Rewrite the record data to be stored in the database
+        * and check values with regular expressions.
+        * dummy parameter is only there for compatibility with params of base class
+        * 
         * @param record = Datensatz als Array
         * @return record
         */
-        function encode($record) {
-
-                if(is_array($record)) {
-                        foreach($this->formDef['fields'] as $key => $field) {
-
-                                if(isset($field['validators']) && is_array($field['validators'])) $this->validateField($key, (isset($record[$key]))?$record[$key]:'', $field['validators']);
-
-                                switch ($field['datatype']) {
-                                case 'VARCHAR':
-                                        if(!@is_array($record[$key])) {
-                                                $new_record[$key] = (isset($record[$key]))?mysql_real_escape_string($record[$key]):'';
-                                        } else {
-                                                $new_record[$key] = implode($field['separator'],$record[$key]);
-                                        }
-                                break;
-                                case 'TEXT':
-                                        if(!is_array($record[$key])) {
-                                                $new_record[$key] = mysql_real_escape_string($record[$key]);
-                                        } else {
-                                                $new_record[$key] = implode($field['separator'],$record[$key]);
-                                        }
-                                break;
-                                case 'DATE':
-                                        if($record[$key] > 0) {
-                                                list($tag,$monat,$jahr) = explode('.',$record[$key]);
-                                                $new_record[$key] = mktime(0,0,0,$monat,$tag,$jahr);
-                                        } else {
-											$new_record[$key] = 0;
-										}
-                                break;
-                                case 'INTEGER':
-                                        $new_record[$key] = (isset($record[$key]))?intval($record[$key]):0;
-                                        //if($new_record[$key] != $record[$key]) $new_record[$key] = $field['default'];
-                                        //if($key == 'refresh') die($record[$key]);
-                                break;
-                                case 'DOUBLE':
-                                        $new_record[$key] = mysql_real_escape_string($record[$key]);
-                                break;
-                                case 'CURRENCY':
-                                        $new_record[$key] = str_replace(",",".",$record[$key]);
-                                break;
-                                }
-
-                                // The use of the field value is deprecated, use validators instead
-                                if(isset($field['regex']) && $field['regex'] != '') {
-                                        // Enable that "." matches also newlines
-                                        $field['regex'] .= 's';
-                                        if(!preg_match($field['regex'], $record[$key])) {
-                                                $errmsg = $field['errmsg'];
-                                                $this->errorMessage .= $errmsg."\r\n";
-                                        }
-                                }
-
-
-                        }
-                }
-                return $new_record;
-        }
-
-        /**
-        * process the validators for a given field.
-        *
-        * @param field_name = Name of the field
-        * @param field_value = value of the field
-        * @param validatoors = Array of validators
-        * @return record
-        */
-
-        function validateField($field_name, $field_value, $validators) {
-
-                global $app;
-				
-				$escape = '`';
-				
-                // loop trough the validators
-                foreach($validators as $validator) {
-
-                        switch ($validator['type']) {
-                                case 'REGEX':
-                                        $validator['regex'] .= 's';
-                                        if(!preg_match($validator['regex'], $field_value)) {
-                                                $errmsg = $validator['errmsg'];
-                                                if(isset($this->wordbook[$errmsg])) {
-                                                	$this->errorMessage .= $this->wordbook[$errmsg]."<br>\r\n";
-												} else {
-													$this->errorMessage .= $errmsg."<br>\r\n";
-												}
-                                        }
-                                break;
-                                case 'UNIQUE':
-                                        if($this->action == 'INSERT') {
-                                                $num_rec = $app->db->queryOneRecord("SELECT count(*) as number FROM ".$escape.$this->formDef['db_table'].$escape. " WHERE $field_name = '".$app->db->quote($field_value)."'");
-                                                if($num_rec["number"] > 0) {
-                                                        $errmsg = $validator['errmsg'];
-														if(isset($this->wordbook[$errmsg])) {
-                                                        	$this->errorMessage .= $this->wordbook[$errmsg]."<br>\r\n";
-														} else {
-															$this->errorMessage .= $errmsg."<br>\r\n";
-														}
-                                                }
-                                        } else {
-                                                $num_rec = $app->db->queryOneRecord("SELECT count(*) as number FROM ".$escape.$this->formDef['db_table'].$escape. " WHERE $field_name = '".$app->db->quote($field_value)."' AND ".$this->formDef['db_table_idx']." != ".$this->primary_id);
-                                                if($num_rec["number"] > 0) {
-                                                        $errmsg = $validator['errmsg'];
-                                                        if(isset($this->wordbook[$errmsg])) {
-                                                        	$this->errorMessage .= $this->wordbook[$errmsg]."<br>\r\n";
-														} else {
-															$this->errorMessage .= $errmsg."<br>\r\n";
-														}
-                                                }
-                                        }
-                                break;
-                                case 'NOTEMPTY':
-                                        if(empty($field_value)) {
-                                                $errmsg = $validator['errmsg'];
-                                                if(isset($this->wordbook[$errmsg])) {
-                                                    $this->errorMessage .= $this->wordbook[$errmsg]."<br>\r\n";
-												} else {
-													$this->errorMessage .= $errmsg."<br>\r\n";
-												}
-                                        }
-                                break;
-                                case 'ISEMAIL':
-                                        if(!preg_match("/^\w+[\w.-]*\w+@\w+[\w.-]*\w+\.[a-z]{2,10}$/i", $field_value)) {
-                                                $errmsg = $validator['errmsg'];
-                                                if(isset($this->wordbook[$errmsg])) {
-                                                    $this->errorMessage .= $this->wordbook[$errmsg]."<br>\r\n";
-												} else {
-													$this->errorMessage .= $errmsg."<br>\r\n";
-												}
-                                        }
-                                break;
-                                case 'ISINT':
-                                        $tmpval = intval($field_value);
-                                        if($tmpval === 0 and !empty($field_value)) {
-                                                $errmsg = $validator['errmsg'];
-                                                if(isset($this->wordbook[$errmsg])) {
-                                                    $this->errorMessage .= $this->wordbook[$errmsg]."<br>\r\n";
-												} else {
-													$this->errorMessage .= $errmsg."<br>\r\n";
-												}
-                                        }
-                                break;
-                                case 'ISPOSITIVE':
-                                        if(!is_numeric($field_value) || $field_value <= 0){
-                                          $errmsg = $validator['errmsg'];
-                                          if(isset($this->wordbook[$errmsg])) {
-                                             $this->errorMessage .= $this->wordbook[$errmsg]."<br>\r\n";
-										  } else {
-											 $this->errorMessage .= $errmsg."<br>\r\n";
-										  }
-                                        }
-                                break;
-                                case 'CUSTOM':
-                                        // Calls a custom class to validate this record
-                                        if($validator['class'] != '' and $validator['function'] != '') {
-                                                $validator_class = $validator['class'];
-                                                $validator_function = $validator['function'];
-                                                $app->uses($validator_class);
-                                                $this->errorMessage .= $app->$validator_class->$validator_function($field_name, $field_value, $validator);
-                                        } else {
-                                                $this->errorMessage .= "Custom validator class or function is empty<br>\r\n";
-                                        }
-                                break;
-								default:
-									$this->errorMessage .= "Unknown Validator: ".$validator['type'];
-								break;
-                        }
-
-
-                }
-
-                return true;
+        function encode($record,$dbencode = true, $dummy = '') {
+			$new_record = $this->_encode($record, '', $dbencode, true);
+			if(isset($record['_ispconfig_pw_crypted'])) $new_record['_ispconfig_pw_crypted'] = $record['_ispconfig_pw_crypted']; // this one is not in form definitions!
+			
+			return $new_record;
         }
 
         /**
         * Create SQL statement
-        *
+        * dummy parameter is only there for compatibility with params of base class
+        * 
         * @param record = Datensatz als Array
         * @param action = INSERT oder UPDATE
         * @param primary_id
         * @return record
         */
-        function getSQL($record, $action = 'INSERT', $primary_id = 0, $sql_ext_where = '') {
+        function getSQL($record, $action = 'INSERT', $primary_id = 0, $sql_ext_where = '', $dummy = '') {
 
                 global $app;
 
-                $this->action = $action;
-                $this->primary_id = $primary_id;
-
-                $record = $this->encode($record,$tab);
-                $sql_insert_key = '';
-                $sql_insert_val = '';
-                $sql_update = '';
-
-                if(!is_array($this->formDef)) $app->error("No form definition found.");
-
-                // gehe durch alle Felder des Tabs
-                if(is_array($record)) {
-                foreach($this->formDef['fields'] as $key => $field) {
-                                // Wenn es kein leeres Passwortfeld ist
-                                if (!($field['formtype'] == 'PASSWORD' and $record[$key] == '')) {
-                                        // Erzeuge Insert oder Update Quelltext
-                                        if($action == "INSERT") {
-                                                if($field['formtype'] == 'PASSWORD') {
-                                                        $sql_insert_key .= "`$key`, ";
-                                                        if($field['encryption'] == 'CRYPT') {
-                                                                $salt="$1$";
-																$base64_alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-																for ($n=0;$n<8;$n++) {
-																	//$salt.=chr(mt_rand(64,126));
-																	$salt.=$base64_alphabet[mt_rand(0,63)];
-																}
-																$salt.="$";
-																// $salt = substr(md5(time()),0,2);
-																$record[$key] = crypt($record[$key],$salt);
-                                                        } else {
-                                                                $record[$key] = md5($record[$key]);
-                                                        }
-														$sql_insert_val .= "'".$record[$key]."', ";
-                                                } elseif ($field['formtype'] == 'CHECKBOX') {
-                                                        $sql_insert_key .= "`$key`, ";
-														if($record[$key] == '') {
-															// if a checkbox is not set, we set it to the unchecked value
-															$sql_insert_val .= "'".$field['value'][0]."', ";
-															$record[$key] = $field['value'][0];
-														} else {
-															$sql_insert_val .= "'".$record[$key]."', ";
-														}
-                                                } else {
-                                                        $sql_insert_key .= "`$key`, ";
-                                                        $sql_insert_val .= "'".$record[$key]."', ";
-                                                }
-                                        } else {
-                                                if($field['formtype'] == 'PASSWORD') {
-														if($field['encryption'] == 'CRYPT') {
-                                                                $salt="$1$";
-																$base64_alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-																for ($n=0;$n<8;$n++) {
-																	//$salt.=chr(mt_rand(64,126));
-																	$salt.=$base64_alphabet[mt_rand(0,63)];
-																}
-																$salt.="$";
-																// $salt = substr(md5(time()),0,2);
-																$record[$key] = crypt($record[$key],$salt);
-                                                        } else {
-                                                                $record[$key] = md5($record[$key]);
-                                                        }
-                                                        $sql_update .= "`$key` = '".$record[$key]."', ";
-                                                } elseif ($field['formtype'] == 'CHECKBOX') {
-														if($record[$key] == '') {
-															// if a checkbox is not set, we set it to the unchecked value
-															$sql_update .= "`$key` = '".$field['value'][0]."', ";
-															$record[$key] = $field['value'][0];
-														} else {
-															$sql_update .= "`$key` = '".$record[$key]."', ";
-														}
-                                                } else {
-                                                        $sql_update .= "`$key` = '".$record[$key]."', ";
-                                                }
-                                        }
-                                } else {
-									// we unset the password filed, if empty to tell the datalog function 
-									// that the password has not been changed
-								    unset($record[$key]);
-								}
-                        }
-        }
-
-
-
-                if(stristr($this->formDef['db_table'],'.')) {
-                        $escape = '';
-                } else {
-                        $escape = '`';
-                }
-
-
-                if($action == "INSERT") {
-                        if($this->formDef['auth'] == 'yes') {
-                                // Setze User und Gruppe
-                                $sql_insert_key .= "`sys_userid`, ";
-                                $sql_insert_val .= ($this->formDef["auth_preset"]["userid"] > 0)?"'".$this->formDef["auth_preset"]["userid"]."', ":"'".$this->sys_userid."', ";
-                                $sql_insert_key .= "`sys_groupid`, ";
-                                $sql_insert_val .= ($this->formDef["auth_preset"]["groupid"] > 0)?"'".$this->formDef["auth_preset"]["groupid"]."', ":"'".$this->sys_default_group."', ";
-                                $sql_insert_key .= "`sys_perm_user`, ";
-                                $sql_insert_val .= "'".$this->formDef["auth_preset"]["perm_user"]."', ";
-                                $sql_insert_key .= "`sys_perm_group`, ";
-                                $sql_insert_val .= "'".$this->formDef["auth_preset"]["perm_group"]."', ";
-                                $sql_insert_key .= "`sys_perm_other`, ";
-                                $sql_insert_val .= "'".$this->formDef["auth_preset"]["perm_other"]."', ";
-                        }
-                        $sql_insert_key = substr($sql_insert_key,0,-2);
-                        $sql_insert_val = substr($sql_insert_val,0,-2);
-                        $sql = "INSERT INTO ".$escape.$this->formDef['db_table'].$escape." ($sql_insert_key) VALUES ($sql_insert_val)";
-                } else {
-                        if($primary_id != 0) {
-                                $sql_update = substr($sql_update,0,-2);
-                                $sql = "UPDATE ".$escape.$this->formDef['db_table'].$escape." SET ".$sql_update." WHERE ".$this->formDef['db_table_idx']." = ".$primary_id;
-                                if($sql_ext_where != '') $sql .= " and ".$sql_ext_where;
-                        } else {
-                                $app->error("Primary ID fehlt!");
-                        }
-                }
-                
-                return $sql;
-        }
+                if(!is_array($this->formDef)) $app->error("Form definition not found.");
+				$this->dataRecord = $record;
+				
+				return $this->_getSQL($record, '', $action, $primary_id, $sql_ext_where, true);
+		}
 		
 		function getDeleteSQL($primary_id) {
 			
@@ -600,153 +222,97 @@ class remoting_lib {
 				$escape = '`';
 			}
 			
-			$sql = "DELETE FROM ".$escape.$this->formDef['db_table'].$escape." WHERE ".$this->formDef['db_table_idx']." = ".$primary_id;
+			$sql = "DELETE FROM ".$escape.$this->formDef['db_table'].$escape." WHERE ".$this->formDef['db_table_idx']." = ".$primary_id. " AND " . $this->getAuthSQL('d', $this->formDef['db_table']);
 			return $sql;
 		}
-
 
 		function getDataRecord($primary_id) {
 			global $app;
 			$escape = '`';
 			if(@is_numeric($primary_id)) {
-				$sql = "SELECT * FROM ".$escape.$this->formDef['db_table'].$escape." WHERE ".$this->formDef['db_table_idx']." = ".$primary_id;
-            	return $app->db->queryOneRecord($sql);
-			} elseif (@is_array($primary_id)) {
-				$sql_where = '';
+				return parent::getDataRecord($primary_id);
+			} elseif (@is_array($primary_id) || @is_object($primary_id)) {
+                if(@is_object($primary_id)) $primary_id = get_object_vars($primary_id); // do not use cast (array)xxx because it returns private and protected properties!
+				$sql_offset = 0;
+                $sql_limit = 0;
+                $sql_where = '';
 				foreach($primary_id as $key => $val) {
 					$key = $app->db->quote($key);
 					$val = $app->db->quote($val);
-					$sql_where .= "$key = '$val' AND ";
+                    if($key == '#OFFSET#') $sql_offset = $app->functions->intval($val);
+                    elseif($key == '#LIMIT#') $sql_limit = $app->functions->intval($val);
+					elseif(stristr($val,'%')) {
+						$sql_where .= "$key like '$val' AND ";
+					} else {
+						$sql_where .= "$key = '$val' AND ";
+					}
 				}
 				$sql_where = substr($sql_where,0,-5);
-				$sql = "SELECT * FROM ".$escape.$this->formDef['db_table'].$escape." WHERE ".$sql_where;
-				return $app->db->queryAllRecords($sql);
+                if($sql_where == '') $sql_where = '1';
+				$sql = "SELECT * FROM ".$escape.$this->formDef['db_table'].$escape." WHERE ".$sql_where. " AND " . $this->getAuthSQL('r', $this->formDef['db_table']);
+                if($sql_offset >= 0 && $sql_limit > 0) $sql .= ' LIMIT ' . $sql_offset . ',' . $sql_limit;
+                return $app->db->queryAllRecords($sql);
 			} else {
 				$this->errorMessage = 'The ID must be either an integer or an array.';
 				return array();
 			}
-			
-			
 		}
 
 		function ispconfig_sysuser_add($params,$insert_id){
-			global $app,$sql1;
+			global $conf,$app,$sql1;
 			$username = $app->db->quote($params["username"]);
 			$password = $app->db->quote($params["password"]);
-			$modules = 'mail,sites,dns,tools';
-			$startmodule = 'mail';
+			if(!isset($params['modules'])) {
+				$modules = $conf['interface_modules_enabled'];
+			} else {
+				$modules = $app->db->quote($params['modules']);
+			}
+			if(isset($params['limit_client']) && $params['limit_client'] > 0) {
+				$modules .= ',client';
+			}
+			
+			if(!isset($params['startmodule'])) {			
+				$startmodule = 'dashboard';
+			} else {						
+				$startmodule = $app->db->quote($params["startmodule"]);
+				if(!preg_match('/'.$startmodule.'/',$modules)) {
+					$_modules = explode(',',$modules);
+					$startmodule=$_modules[0];
+				}
+			}
 			$usertheme = $app->db->quote($params["usertheme"]);
 			$type = 'user';
 			$active = 1;
-			$insert_id = intval($insert_id);
+			$insert_id = $app->functions->intval($insert_id);
 			$language = $app->db->quote($params["language"]);
 			$groupid = $app->db->datalogInsert('sys_group', "(name,description,client_id) VALUES ('$username','','$insert_id')", 'groupid');
 			$groups = $groupid;
+			if(!isset($params['_ispconfig_pw_crypted']) || $params['_ispconfig_pw_crypted'] != 1) $password = $app->auth->crypt_password(stripslashes($password));
 			$sql1 = "INSERT INTO sys_user (username,passwort,modules,startmodule,app_theme,typ,active,language,groups,default_group,client_id)
-			VALUES ('$username',md5('$password'),'$modules','$startmodule','$usertheme','$type','$active','$language',$groups,$groupid,$insert_id)";
+			VALUES ('$username','$password','$modules','$startmodule','$usertheme','$type','$active','$language',$groups,$groupid,$insert_id)";
 			$app->db->query($sql1);
 		}
 		
 		function ispconfig_sysuser_update($params,$client_id){
 			global $app;
 			$username = $app->db->quote($params["username"]);
-			$password = $app->db->quote($params["password"]);
-			$client_id = intval($client_id);
-			$sql = "UPDATE sys_user set username = '$username', passwort = md5('$password') WHERE client_id = $client_id";
+			$clear_password = $app->db->quote($params["password"]);
+			$client_id = $app->functions->intval($client_id);
+			if(!isset($params['_ispconfig_pw_crypted']) || $params['_ispconfig_pw_crypted'] != 1) $password = $app->auth->crypt_password(stripslashes($clear_password));
+            else $password = $clear_password;
+			if ($clear_password) $pwstring = ", passwort = '$password'"; else $pwstring ="" ;
+			$sql = "UPDATE sys_user set username = '$username' $pwstring WHERE client_id = $client_id";
 			$app->db->query($sql);
 		}
 		
 		function ispconfig_sysuser_delete($client_id){
 			global $app;
-			$client_id = intval($client_id);
+			$client_id = $app->functions->intval($client_id);
 			$sql = "DELETE FROM sys_user WHERE client_id = $client_id";
 			$app->db->query($sql);
+			$sql = "DELETE FROM sys_group WHERE client_id = $client_id";
+			$app->db->query($sql);
 		}
-
-        function datalogSave($action,$primary_id, $record_old, $record_new) {
-                global $app,$conf;
-
-                if(stristr($this->formDef['db_table'],'.')) {
-                        $escape = '';
-                } else {
-                        $escape = '`';
-                }
-
-                $diffrec = array();
-				
-                if(is_array($record_new) && count($record_new) > 0) {
-                        foreach($record_new as $key => $val) {
-                                if($record_old[$key] != $val) {
-										// Record has changed
-                                        $diffrec[$key] = array('old' => $record_old[$key],
-                                                               'new' => $val);
-                                }
-                        }
-                } elseif(is_array($record_old)) {
-                        foreach($record_old as $key => $val) {
-                                if($record_new[$key] != $val) {
-										// Record has changed
-                                        $diffrec[$key] = array('new' => $record_new[$key],
-                                                               'old' => $val);
-                                }
-                        }
-                }
-				$this->diffrec = $diffrec;
-				
-				
-				// Full diff records for ISPConfig, they have a different format then the simple diffrec
-				$diffrec_full = array();
-
-                if(is_array($record_old) && count($record_old) > 0) {
-                        foreach($record_old as $key => $val) {
-                                if(isset($record_new[$key]) && $record_new[$key] != $val) {
-                                    // Record has changed
-									$diffrec_full['old'][$key] = $val;
-									$diffrec_full['new'][$key] = $record_new[$key];
-                                } else {
-									$diffrec_full['old'][$key] = $val;
-									$diffrec_full['new'][$key] = $val;
-								}
-                        }
-                } elseif(is_array($record_new)) {
-                        foreach($record_new as $key => $val) {
-                                if(isset($record_new[$key]) && $record_old[$key] != $val) {
-                                    // Record has changed
-									$diffrec_full['new'][$key] = $val;
-									$diffrec_full['old'][$key] = $record_old[$key];
-                                } else {
-									$diffrec_full['new'][$key] = $val;
-									$diffrec_full['old'][$key] = $val;
-								}
-                        }
-                }
-				
-				/*
-				echo "<pre>";
-				print_r($diffrec_full);
-				echo "</pre>";
-				*/
-				
-				// Insert the server_id, if the record has a server_id
-				$server_id = (isset($record_old["server_id"]) && $record_old["server_id"] > 0)?$record_old["server_id"]:0;
-				if(isset($record_new["server_id"])) $server_id = $record_new["server_id"];
-
-                if(count($this->diffrec) > 0) {
-						$diffstr = $app->db->quote(serialize($diffrec_full));
-                        $username = $app->db->quote($this->sys_username);
-                        $dbidx = $this->formDef['db_table_idx'].":".$primary_id;
-                        // $action = ($action == 'INSERT')?'i':'u';
-						
-						if($action == 'INSERT') $action = 'i';
-						if($action == 'UPDATE') $action = 'u';
-						if($action == 'DELETE') $action = 'd';
-                        $sql = "INSERT INTO sys_datalog (dbtable,dbidx,server_id,action,tstamp,user,data) VALUES ('".$this->formDef['db_table']."','$dbidx','$server_id','$action','".time()."','$username','$diffstr')";
-						$app->db->query($sql);
-                }
-
-                return true;
-
-        }
 
 }
 

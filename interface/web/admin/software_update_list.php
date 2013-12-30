@@ -66,13 +66,13 @@ if(is_array($repos)) {
 					foreach($updates as $u) {
 						
 						$version_array = explode('.',$u['version']);
-						$v1 = intval($version_array[0]);
-						$v2 = intval($version_array[1]);
-						$v3 = intval($version_array[2]);
-						$v4 = intval($version_array[3]);
+						$v1 = $app->functions->intval($version_array[0]);
+						$v2 = $app->functions->intval($version_array[1]);
+						$v3 = $app->functions->intval($version_array[2]);
+						$v4 = $app->functions->intval($version_array[3]);
 						
 						$package_name = $app->db->quote($u['package_name']);
-						$software_repo_id = intval($repo['software_repo_id']);
+						$software_repo_id = $app->functions->intval($repo['software_repo_id']);
 						$update_url = $app->db->quote($u['url']);
 						$update_md5 = $app->db->quote($u['md5']);
 						$update_dependencies = (isset($u['dependencies']))?$app->db->quote($u['dependencies']):'';
@@ -101,8 +101,8 @@ if(is_array($repos)) {
 //* Install packages, if GET Request
 if(isset($_GET['action']) && $_GET['action'] == 'install' && $_GET['package'] != '' && $_GET['server_id'] > 0) {
 	$package_name = $app->db->quote($_GET['package']);
-	$server_id = intval($_GET['server_id']);
-	$software_update_id = intval($_GET['id']);
+	$server_id = $app->functions->intval($_GET['server_id']);
+	$software_update_id = $app->functions->intval($_GET['id']);
 	
 	$insert_data = "(package_name, server_id, software_update_id, status) VALUES ('$package_name', '$server_id', '$software_update_id','installing')";
 	// $insert_data = "(package_name, server_id, software_update_id, status) VALUES ('$package_name', '$server_id', '$software_update_id','installed')";
@@ -130,7 +130,7 @@ GROUP BY software_update.software_update_id
 
 
 if(isset($_POST["server_id"]) && $_POST["server_id"] > 0) {
-	$server_id = intval($_POST["server_id"]);
+	$server_id = $app->functions->intval($_POST["server_id"]);
 } else {
 	$server_id = 1;
 }
@@ -161,7 +161,7 @@ if(is_array($installed_packages)) {
 	foreach($installed_packages as $ip) {
 		
 		// Get version number of the latest installed version
-		$sql = "SELECT v1, v2, v3, v4 FROM software_update, software_update_inst WHERE software_update.software_update_id = software_update_inst.software_update_id AND server_id = 1 ORDER BY v1 DESC , v2 DESC , v3 DESC , v4 DESC LIMIT 0,1";
+		$sql = "SELECT v1, v2, v3, v4 FROM software_update, software_update_inst WHERE software_update.software_update_id = software_update_inst.software_update_id AND server_id = ".$server_id." ORDER BY v1 DESC , v2 DESC , v3 DESC , v4 DESC LIMIT 0,1";
 		$lu = $app->db->queryOneRecord($sql);
 		
 		// Get all installable updates
@@ -175,7 +175,7 @@ if(is_array($installed_packages)) {
 			
 			foreach($updates as $key => $u) {
 				$version = $u['v1'].'.'.$u['v2'].'.'.$u['v3'].'.'.$u['v4'];
-				$installed_txt = "<a href=\"#\" onClick=\"loadContent('admin/software_update_list.php?action=install&package=".$u["package_name"]."&id=".$u["software_update_id"]."&server_id=".$server_id."');\">Install Update</a><br />";
+				$installed_txt = "<a href=\"#\" onclick=\"loadContent('admin/software_update_list.php?action=install&package=".$u["package_name"]."&id=".$u["software_update_id"]."&server_id=".$server_id."');\">Install Update</a><br />";
 				$records_out[] = array('version' => $version, 'update_title' => $u["update_title"], 'installed' => $installed_txt);
 		
 			}
@@ -199,7 +199,7 @@ if(is_array($updates)) {
 		if($u['status'] == 'installed' || $u['status'] == 'installing' || $u['status'] == 'deleting') {
 			$installed_txt .= "Installed version $version<br />";
 		} else {
-			$installed_txt .= "<a href=\"#\" onClick=\"loadContent('admin/software_update_list.php?action=install&package=".$u["package_name"]."&id=".$u["software_update_id"]."&server_id=".$server_id."');\">Install now</a><br />";
+			$installed_txt .= "<a href=\"#\" onclick=\"loadContent('admin/software_update_list.php?action=install&package=".$u["package_name"]."&id=".$u["software_update_id"]."&server_id=".$server_id."');\">Install now</a><br />";
 		}
 		$updates[$key]['installed'] = $installed_txt;
 		
@@ -211,7 +211,8 @@ if(is_array($updates)) {
 
 $app->tpl->setLoop('records',$records_out);
 
-include_once('lib/lang/en_software_update_list.lng');
+$language = (isset($_SESSION['s']['language']))?$_SESSION['s']['language']:$conf['language'];
+include_once('lib/lang/'.$language.'_software_update_list.lng');
 $app->tpl->setVar($wb);
 
 

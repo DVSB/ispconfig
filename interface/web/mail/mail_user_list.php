@@ -31,6 +31,12 @@ class list_action extends listform_actions {
 		} else {
 			$app->tpl->setVar('mailboxlist_webmail_link',0);
 		}
+
+    if($global_config["enable_custom_login"] == "y") {
+        $app->tpl->setVar("enable_custom_login", 1);
+    } else {
+        $app->tpl->setVar("enable_custom_login", 0);
+    }
 		
 		parent::onShow();
 	}
@@ -38,6 +44,7 @@ class list_action extends listform_actions {
 }
 
 $list = new list_action;
+$list->SQLOrderBy = 'ORDER BY mail_user.email';
 $list->onLoad();
 
 

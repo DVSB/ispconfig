@@ -60,16 +60,16 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-$form['title'] 			= 'Users';
+$form['title'] 		= 'Users';
 $form['description'] 	= 'Form to edit systemusers.';
-$form['name'] 			= 'users';
-$form['action']			= 'users_edit.php';
-$form['db_table']		= 'sys_user';
+$form['name'] 		= 'users';
+$form['action']		= 'users_edit.php';
+$form['db_table']	= 'sys_user';
 $form['db_table_idx']	= 'userid';
-$form["db_history"]		= "no";
+$form["db_history"]	= "no";
 $form['tab_default']	= 'users';
 $form['list_default']	= 'users_list.php';
-$form['auth']			= 'yes';
+$form['auth']		= 'yes';
 
 //* 0 = id of the user, > 0 id must match with id of current user
 $form['auth_preset']['userid']  = 0; 
@@ -87,7 +87,7 @@ $handle = @opendir(ISPC_WEB_PATH);
 while ($file = @readdir ($handle)) { 
     if ($file != '.' && $file != '..') {
         if(@is_dir(ISPC_WEB_PATH."/$file")) {
-            if(is_file(ISPC_WEB_PATH."/$file/lib/module.conf.php") and $file != 'login' && $file != 'designer') {
+            if(is_file(ISPC_WEB_PATH."/$file/lib/module.conf.php") and $file != 'login' && $file != 'designer' && $file != 'mailuser') {
 				$modules_list[$file] = $file;
 			}
         }
@@ -100,7 +100,9 @@ $handle = @opendir(ISPC_THEMES_PATH);
 while ($file = @readdir ($handle)) { 
     if (substr($file, 0, 1) != '.') {
         if(@is_dir(ISPC_THEMES_PATH."/$file")) {
-			$themes_list[$file] = $file;
+			if(!file_exists(ISPC_THEMES_PATH."/$file/ispconfig_version") || (@file_exists(ISPC_THEMES_PATH."/$file/ispconfig_version") && trim(@file_get_contents(ISPC_THEMES_PATH."/$file/ispconfig_version")) == ISPC_APP_VERSION)) {
+                $themes_list[$file] = $file;
+            }
         }
 	}
 }
@@ -137,14 +139,18 @@ $form['tabs']['users'] = array (
 		'username' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
-			'validators'	=> array ( 	0 => array (	'type'	=> 'NOTEMPTY',
-														'errmsg'=> 'username_empty'),
-										1 => array (	'type'	=> 'UNIQUE',
-														'errmsg'=> 'username_unique'),
-										2 => array (	'type'	=> 'REGEX',
-														'regex' => '/^[\w\.\-\_]{0,64}$/',
-														'errmsg'=> 'username_err'),
-									),
+			'validators'	=> array (  0 => array (    'type'	=> 'NOTEMPTY',
+                                                                    'errmsg'=> 'username_empty'),
+                                                    1 => array (    'type'	=> 'UNIQUE',
+                                                                    'errmsg'=> 'username_unique'),
+                                                    2 => array (    'type'	=> 'REGEX',
+                                                                    'regex' => '/^[\w\.\-\_]{0,64}$/',
+                                                                    'errmsg'=> 'username_err'),
+													3 => array (	'type'	=> 'CUSTOM',
+														'class' => 'validate_client',
+														'function' => 'username_collision',
+														'errmsg'=> 'username_error_collision'),
+                                                ),
 			'regex'		=> '',
 			'errmsg'	=> '',
 			'default'	=> '',
@@ -158,7 +164,7 @@ $form['tabs']['users'] = array (
 		'passwort' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'PASSWORD',
-			'encryption'=> 'CRYPT',
+			'encryption'    => 'CRYPT',
 			'regex'		=> '',
 			'errmsg'	=> '',
 			'default'	=> '',

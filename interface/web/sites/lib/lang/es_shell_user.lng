@@ -1,6 +1,4 @@
 <?php
-$wb['uid_txt'] = 'Usuario web';
-$wb['gid_txt'] = 'Grupo';
 $wb['shell_txt'] = 'Consola (shell)';
 $wb['dir_txt'] = 'Dir';
 $wb['server_id_txt'] = 'Servidor';
@@ -19,4 +17,15 @@ $wb['uid_error_empty'] = 'GID vacío';
 $wb['directory_error_empty'] = 'Directorio vacío';
 $wb['limit_shell_user_txt'] = 'Se ha alcanzado el número máximo de usuarios de consola';
 $wb['parent_domain_id_error_empty'] = 'No se ha seleccionado un sitio web.';
+$wb['puser_txt'] = 'Nombre del usuario Web';
+$wb['pgroup_txt'] = 'Web Group';
+$wb['ssh_rsa_txt'] = 'SSH-RSA de clave pública (para los inicios de sesión basados ??en clave)';
+$wb['dir_dot_error'] = 'No .. ruta permitida.';
+$wb['dir_slashdot_error'] = 'No ./ en ruta permitida.';
+$wb['generate_password_txt'] = 'Generate Password';
+$wb['repeat_password_txt'] = 'Repeat Password';
+$wb['password_mismatch_txt'] = 'The passwords do not match.';
+$wb['password_match_txt'] = 'The passwords do match.';
+$wb['username_must_not_exceed_32_chars_txt'] = 'The username must not exceed 32 characters.';
+$wb['username_not_allowed_txt'] = 'The username is not allowed.';
 ?>

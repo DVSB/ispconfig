@@ -31,7 +31,7 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 class plugin {
 	
 	private $subscribed_events = array();
-	private $debug = true;
+	private $debug = false;
 	
 	
 	/*
@@ -63,15 +63,15 @@ class plugin {
 				//** load the plugins
 				foreach($tmp_plugins as $plugin_name => $file) {
 					include_once($plugins_dir.$file);
-					if($this->debug) $app->log("Loading Plugin: $plugin_name",LOGLEVEL_DEBUG);
+					if($this->debug) $app->log('Loading plugin: '.$plugin_name,LOGLEVEL_DEBUG);
 					$app->loaded_plugins[$plugin_name] = new $plugin_name;
 					$app->loaded_plugins[$plugin_name]->onLoad();
 				}
 			} else {
-				$app->log("Unable to open the plugin directory: $plugins_dir",LOGLEVEL_ERROR);
+				$app->log('Unable to open the plugins directory: '.$plugins_dir,LOGLEVEL_ERROR);
 			}
 		} else {
-			$app->log("Plugin directory missing: $plugins_dir",LOGLEVEL_ERROR);
+			$app->log('Plugins directory missing: '.$plugins_dir,LOGLEVEL_ERROR);
 		}
 		
 	}
@@ -86,7 +86,6 @@ class plugin {
 		
 		$_SESSION['s']['plugin_cache'][$event_name][] = array('plugin' => $plugin_name, 'function' => $function_name);
 		if($this->debug) $app->log("Plugin '$plugin_name' has registered the function '$function_name' for the event '$event_name'",LOGLEVEL_DEBUG);
-
 	}
 	
 	/*
@@ -98,7 +97,7 @@ class plugin {
 		
 		if(!isset($_SESSION['s']['plugin_cache'])) {
 			$this->loadPluginCache();
-			if($this->debug) $app->log("Loaded the plugin cache.",LOGLEVEL_DEBUG);
+			if($this->debug) $app->log('Loaded the plugin cache.',LOGLEVEL_DEBUG);
 		}
 		
 		
@@ -131,28 +130,35 @@ class plugin {
 		}
 		
 	 } // end function raiseEvent
-	 
+	
 	 //* Internal function to load the plugin and call the event function in the plugin.
 	 private function callPluginEvent($event_name,$data) {
 	 	global $app;
-	 	
+
 	 	//* execute the functions for the events
-		if(is_array($_SESSION['s']['plugin_cache'][$event_name])) {
+		if(@is_array($_SESSION['s']['plugin_cache'][$event_name])) {
 			foreach($_SESSION['s']['plugin_cache'][$event_name] as $rec) {
 				$plugin_name = $rec['plugin'];
 				$function_name = $rec['function'];
 				$plugin_file = ISPC_LIB_PATH.FS_DIV.'plugins'.FS_DIV.$plugin_name.'.inc.php';
+		
+				
 				if(is_file($plugin_file)) {
 					if(!isset($app->loaded_plugins[$plugin_name])) {
 						include_once($plugin_file);
 						$app->loaded_plugins[$plugin_name] = new $plugin_name;
 					}
+					
 					if($this->debug) $app->log("Called method: '$function_name' in plugin '$plugin_name' for event '$event_name'",LOGLEVEL_DEBUG);
-					call_user_method($function_name,$app->loaded_plugins[$plugin_name],$event_name,$data);
+					// call_user_method($function_name,$app->loaded_plugins[$plugin_name],$event_name,$data);
+
+					call_user_func(array($app->loaded_plugins[$plugin_name],$function_name),$event_name,$data);
+	
 				}
 			}
 			
 		}
+		
 	 } // end functiom callPluginEvent
 	
 	

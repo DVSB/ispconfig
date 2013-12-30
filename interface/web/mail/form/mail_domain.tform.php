@@ -29,6 +29,11 @@
 	Hint:
 	The ID field of the database table is not part of the datafield definition.
 	The ID field must be always auto incement (int or bigint).
+	
+	Search:
+	- searchable = 1 or searchable = 2 include the field in the search
+	- searchable = 1: this field will be the title of the search result
+	- searchable = 2: this field will be included in the description of the search result
 
 
 */
@@ -72,19 +77,54 @@ $form["tabs"]['domain'] = array (
 		'domain' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'TEXT',
+            'filters'   => array( 0 => array( 'event' => 'SAVE',
+                                              'type' => 'IDNTOASCII'),
+                                  1 => array( 'event' => 'SHOW',
+                                              'type' => 'IDNTOUTF8'),
+                                  2 => array( 'event' => 'SAVE',
+                                              'type' => 'TOLOWER')
+                                ),
 			'validators'	=> array ( 	0 => array (	'type'	=> 'NOTEMPTY',
 														'errmsg'=> 'domain_error_empty'),
 										1 => array (	'type'	=> 'UNIQUE',
 														'errmsg'=> 'domain_error_unique'),
 										2 => array (	'type'	=> 'REGEX',
-														'regex' => '/^[\w\.\-]{2,255}\.[a-zA-Z]{2,10}$/',
+														'regex' => '/^[\w\.\-]{2,255}\.[a-zA-Z0-9\-]{2,30}$/',
 														'errmsg'=> 'domain_error_regex'),
 									),
 			'default'	=> '',
 			'value'		=> '',
 			'width'		=> '30',
-			'maxlength'	=> '255'
+			'maxlength'	=> '255',
+			'searchable' => 1
 		),
+                'dkim' => array (
+                        'datatype'      => 'VARCHAR',
+                        'formtype'      => 'CHECKBOX',
+                        'default'       => 'n',
+                        'value'         => array(0 => 'n',1 => 'y')
+                ),
+                'dkim_private' => array (
+                        'datatype'      => 'TEXT',
+                        'formtype'      => 'TEXTAREA',
+                        'default'       => '',
+                        'value'         => '',
+                        'cols'          => '30',
+                        'rows'          => '10',
+                        'validators'    => array (  0 => array ('type'  => 'CUSTOM',
+                                                                'class' => 'validate_dkim',
+                                                                'function' => 'check_private_key',
+                                                                'errmsg'=> 'dkim_private_key_error'),
+                                    ),
+                ),
+                'dkim_public' => array (
+                        'datatype'      => 'TEXT',
+                        'formtype'      => 'TEXTAREA',
+                        'default'       => '',
+                        'value'         => '',
+                        'cols'          => '30',
+                        'rows'          => '10'
+                ),
 		'active' => array (
 			'datatype'	=> 'VARCHAR',
 			'formtype'	=> 'CHECKBOX',

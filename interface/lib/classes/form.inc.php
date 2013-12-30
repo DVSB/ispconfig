@@ -38,9 +38,9 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *	Tabellendefinition
 *	
 *	Datentypen:
-*	- INTEGER (Wandelt Ausdrücke in Int um)
+*	- INTEGER (Wandelt AusdrÃ¼cke in Int um)
 *	- DOUBLE
-*	- CURRENCY (Formatiert Zahlen nach Währungsnotation)
+*	- CURRENCY (Formatiert Zahlen nach WÃ¤hrungsnotation)
 *	- VARCHAR (kein weiterer Format Check)
 *	- DATE (Datumsformat, Timestamp Umwandlung)
 *	
@@ -54,10 +54,10 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *	- Wert oder Array
 *	
 *	SEPARATOR
-*	- Trennzeichen für multiple Felder
+*	- Trennzeichen fÃ¼r multiple Felder
 *
 *	Hinweis:
-*	Das ID-Feld ist nicht bei den Table Values einzufügen.
+*	Das ID-Feld ist nicht bei den Table Values einzufÃ¼gen.
 *
 * @package form
 * @author Till Brehm
@@ -97,7 +97,7 @@ class form {
 	var $table_index;
 	
 	/**
-	* enthält die Fehlermeldung bei Überprüfung
+	* enthÃ¤lt die Fehlermeldung bei ÃœberprÃ¼fung
 	* der Variablen mit Regex
 	* @var errorMessage
 	*/
@@ -132,14 +132,15 @@ class form {
 	
 	
 	/**
-	* Konvertiert die Daten des übergebenen assoziativen
+	* Konvertiert die Daten des Ã¼bergebenen assoziativen
 	* Arrays in "menschenlesbare" Form.
-	* Datentyp Konvertierung, z.B. für Ausgabe in Listen.
+	* Datentyp Konvertierung, z.B. fÃ¼r Ausgabe in Listen.
 	*
 	* @param record
 	* @return record
 	*/
 	function decode($record) {
+        global $app;
 		if(is_array($record)) {
 			foreach($record as $key => $val) {
 				switch ($this->tableDef[$key]['datatype']) {
@@ -154,7 +155,7 @@ class form {
 				break;
 				
 				case 'INTEGER':
-					$new_record[$key] = intval($val);
+					$new_record[$key] = $app->functions->intval($val);
 				break;
 				
 				case 'DOUBLE':
@@ -175,7 +176,7 @@ class form {
 	}
 	
 	/**
-	* Record für Ausgabe in Formularen vorbereiten.
+	* Record fÃ¼r Ausgabe in Formularen vorbereiten.
 	*
 	* @param record = Datensatz als Array
 	* @param action = NEW oder EDIT 
@@ -279,14 +280,14 @@ class form {
 	}
 	
 	/**
-	* Record in "maschinen lesbares" Format überführen
-	* und Werte gegen reguläre Ausdrücke prüfen.
+	* Record in "maschinen lesbares" Format Ã¼berfÃ¼hren
+	* und Werte gegen regulÃ¤re AusdrÃ¼cke prÃ¼fen.
 	*
 	* @param record = Datensatz als Array
 	* @return record
 	*/
 	function encode($record) {
-		
+		global $app;
 		$this->errorMessage = '';
 		
 		if(is_array($record)) {
@@ -294,7 +295,7 @@ class form {
 				switch ($this->tableDef[$key]['datatype']) {
 				case 'VARCHAR':
 					if(!is_array($val)) {
-						$new_record[$key] = mysql_real_escape_string($val);
+						$new_record[$key] = $app->db->quote($val);
 					} else {
 						$new_record[$key] = implode($this->tableDef[$key]['separator'],$val);
 					}
@@ -306,10 +307,10 @@ class form {
 					}
 				break;
 				case 'INTEGER':
-					$new_record[$key] = intval($val);
+					$new_record[$key] = $app->functions->intval($val);
 				break;
 				case 'DOUBLE':
-					$new_record[$key] = mysql_real_escape_string($val);
+					$new_record[$key] = $app->db->quote($val);
 				break;
 				case 'CURRENCY':
 					$new_record[$key] = str_replace(",",".",$val);
@@ -330,7 +331,7 @@ class form {
 	}
 	
 	/**
-	* SQL Statement für Record erzeugen.
+	* SQL Statement fÃ¼r Record erzeugen.
 	*
 	* @param record = Datensatz als Array
 	* @param action = INSERT oder UPDATE
@@ -390,7 +391,7 @@ class form {
 		}
         }
 		
-		// Füge Backticks nur bei unvollständigen Tabellennamen ein
+		// FÃ¼ge Backticks nur bei unvollstÃ¤ndigen Tabellennamen ein
 		if(stristr($this->table_name,'.')) {
 			$escape = '';
 		} else {
@@ -437,7 +438,7 @@ class form {
         if($this->errorMessage == '') {
         	// wenn kein Fehler vorliegt
 			if($_REQUEST["next_tab"] != '') {
-            	// wenn nächster Tab bekannt
+            	// wenn nÃ¤chster Tab bekannt
             	$active_tab = $_REQUEST["next_tab"];
             } else {
             	// ansonsten ersten tab nehmen
