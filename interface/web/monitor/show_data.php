@@ -61,13 +61,6 @@ switch($dataType) {
         $title = $app->lng("Disk usage").' ('. $monTransSrv .' : ' . $_SESSION['monitor']['server_name'] . ')';
         $description = '';
         break;
-    case 'database_size':
-        $template = 'templates/show_data.htm';
-        $output .= $app->tools_monitor->showDatabaseSize();
-        $time = $app->tools_monitor->getDataTime('database_size');
-        $title = $app->lng("Database size").' ('. $monTransSrv .' : ' . $_SESSION['monitor']['server_name'] . ')';
-        $description = '';
-        break;
     case 'mem_usage':
         $template = 'templates/show_data.htm';
         $output .= $app->tools_monitor->showMemUsage();
@@ -129,13 +122,6 @@ switch($dataType) {
         $output .= $app->tools_monitor->showFail2ban();
         $time = $app->tools_monitor->getDataTime('log_fail2ban');
         $title = $app->lng("monitor_title_fail2ban_txt") . ' (' . $monTransSrv . ' : ' . $_SESSION['monitor']['server_name'] . ')';
-        $description = '';
-        break;
-    case 'mongodb':
-        $template = 'templates/show_data.htm';
-        $output .= $app->tools_monitor->showMongoDB();
-        $time = $app->tools_monitor->getDataTime('log_mongodb');
-        $title = $app->lng("monitor_title_mongodb_txt") . ' (' . $monTransSrv . ' : ' . $_SESSION['monitor']['server_name'] . ')';
         $description = '';
         break;
     case 'iptables':

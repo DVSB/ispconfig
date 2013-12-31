@@ -132,7 +132,7 @@ class installer_base {
 		if(is_installed('named') || is_installed('bind') || is_installed('bind9')) $conf['bind']['installed'] = true;
 		if(is_installed('squid')) $conf['squid']['installed'] = true;
 		if(is_installed('nginx')) $conf['nginx']['installed'] = true;
-		if(is_installed('iptables') && is_installed('ufw')) $conf['ufw']['installed'] = true;
+		// if(is_installed('iptables') && is_installed('ufw')) $conf['ufw']['installed'] = true;
 		if(is_installed('fail2ban-server')) $conf['fail2ban']['installed'] = true;
 		if(is_installed('vzctl')) $conf['openvz']['installed'] = true;
 		if(is_dir("/etc/Bastille")) $conf['bastille']['installed'] = true;
@@ -665,15 +665,6 @@ class installer_base {
 		//* mysql-virtual_relayrecipientmaps.cf
 		$this->process_postfix_config('mysql-virtual_relayrecipientmaps.cf');
 
-		//* postfix-dkim
-		$full_file_name=$config_dir.'/tag_as_originating.re';
-                if(is_file($full_file_name)) copy($full_file_name, $config_dir.$configfile.'~');
-		wf($full_file_name,'/^/ FILTER amavis:[127.0.0.1]:10026');
-
-		$full_file_name=$config_dir.'/tag_as_foreign.re';
-                if(is_file($full_file_name)) copy($full_file_name, $config_dir.$configfile.'~');
-		wf($full_file_name,'/^/ FILTER amavis:[127.0.0.1]:10024');
-
 		//* Changing mode and group of the new created config files.
 		caselog('chmod o= '.$config_dir.'/mysql-virtual_*.cf* &> /dev/null',
 				__FILE__, __LINE__, 'chmod on mysql-virtual_*.cf*', 'chmod on mysql-virtual_*.cf* failed');
@@ -1048,20 +1039,7 @@ class installer_base {
 		// Add the clamav user to the amavis group
 		exec('adduser clamav amavis');
 
-		// Create the director for DKIM-Keys
-		mkdir("/var/lib/amavis/dkim",0750);
-		// get shell-user for amavis
-		$amavis_user=exec('grep -o "^amavis:\|^vscan:" /etc/passwd');
-		if(!empty($amavis_user)) {
-			$amavis_user=rtrim($amavis_user,":");
-			exec('chown '.$amavis_user.'/var/lib/amavis/dkim');
-		}
-		// get shell-group for amavis
-		$amavis_group=exec('grep -o "^amavis:\|^vscan:" /etc/group');
-		if(!empty($amavis_group)) {
-			$amavis_group=rtrim($amavis_group,":");
-			exec('chgrp '.$amavis_group.'/var/lib/amavis/dkim');
-		}
+
 	}
 
 	public function configure_spamassassin() {
@@ -1387,6 +1365,7 @@ class installer_base {
 		exec('chown root:root '.$conf["squid"]["config_dir"].'/'.$configfile);
 	}
 
+	/*
 	public function configure_ufw_firewall()
 	{
 		$configfile = 'ufw.conf';
@@ -1396,8 +1375,9 @@ class installer_base {
 		exec('chmod 600 /etc/ufw/ufw.conf');
 		exec('chown root:root /etc/ufw/ufw.conf');
 	}
+	*/
 
-	public function configure_bastille_firewall() {
+	public function configure_firewall() {
 		global $conf;
 
 		$dist_init_scripts = $conf['init_scripts'];
@@ -1653,17 +1633,7 @@ class installer_base {
 
 		$ssl_pw = substr(md5(mt_rand()),0,6);
 		exec("openssl genrsa -des3 -passout pass:$ssl_pw -out $ssl_key_file 4096");
-		$command = "";
-		if (isset($conf['pre_ini']) && isset($conf['pre_ini']['cert_input'])) {
-			$file = $conf['pre_ini']['cert_input'];
-			if (file_exists($file)) {
-				$command = "cat ". $file ." | ";
-			}
-		}
-		$gen_csr = $command ."openssl req -new -passin pass:$ssl_pw "
-				. "-passout pass:$ssl_pw -key $ssl_key_file "
-				. "-out $ssl_csr_file";
-		exec($gen_csr);
+		exec("openssl req -new -passin pass:$ssl_pw -passout pass:$ssl_pw -key $ssl_key_file -out $ssl_csr_file");
 		exec("openssl req -x509 -passin pass:$ssl_pw -passout pass:$ssl_pw -key $ssl_key_file -in $ssl_csr_file -out $ssl_crt_file -days 3650");
 		exec("openssl rsa -passin pass:$ssl_pw -in $ssl_key_file -out $ssl_key_file.insecure");
 		rename($ssl_key_file,$ssl_key_file.'.secure');
@@ -1723,7 +1693,6 @@ class installer_base {
 		$content = str_replace('{language}', $conf['language'], $content);
 		$content = str_replace('{timezone}', $conf['timezone'], $content);
 		$content = str_replace('{theme}', $conf['theme'], $content);
-		$content = str_replace('{language_file_import_enabled}', ($conf['language_file_import_enabled'] == true)?'true':'false', $content);
 
 		wf($install_dir.'/interface/lib/'.$configfile, $content);
 
@@ -1748,7 +1717,6 @@ class installer_base {
 		$content = str_replace('{language}', $conf['language'], $content);
 		$content = str_replace('{timezone}', $conf['timezone'], $content);
 		$content = str_replace('{theme}', $conf['theme'], $content);
-		$content = str_replace('{language_file_import_enabled}', ($conf['language_file_import_enabled'] == true)?'true':'false', $content);
 
 		wf($install_dir.'/server/lib/'.$configfile, $content);
 
