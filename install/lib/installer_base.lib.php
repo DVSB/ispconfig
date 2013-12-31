@@ -1653,7 +1653,17 @@ class installer_base {
 
 		$ssl_pw = substr(md5(mt_rand()),0,6);
 		exec("openssl genrsa -des3 -passout pass:$ssl_pw -out $ssl_key_file 4096");
-		exec("openssl req -new -passin pass:$ssl_pw -passout pass:$ssl_pw -key $ssl_key_file -out $ssl_csr_file");
+		$command = "";
+		if (isset($conf['pre_ini']) && isset($conf['pre_ini']['cert_input'])) {
+			$file = $conf['pre_ini']['cert_input'];
+			if (file_exists($file)) {
+				$command = "cat ". $file ." | ";
+			}
+		}
+		$gen_csr = $command ."openssl req -new -passin pass:$ssl_pw "
+				. "-passout pass:$ssl_pw -key $ssl_key_file "
+				. "-out $ssl_csr_file";
+		exec($gen_csr);
 		exec("openssl req -x509 -passin pass:$ssl_pw -passout pass:$ssl_pw -key $ssl_key_file -in $ssl_csr_file -out $ssl_crt_file -days 3650");
 		exec("openssl rsa -passin pass:$ssl_pw -in $ssl_key_file -out $ssl_key_file.insecure");
 		rename($ssl_key_file,$ssl_key_file.'.secure');

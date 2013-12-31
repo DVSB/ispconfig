@@ -104,6 +104,12 @@ if(is_dir('/usr/local/ispconfig')) {
 //** Detect the installed applications
 $inst->find_installed_apps();
 
+if ($argc > 2 && $argv[1] == '-c') {
+	$ini = $argv[2];
+	if (file_exists($ini)) {
+		$conf['pre_ini'] = parse_ini_file($ini);
+	}
+}
 //** Select the language and set default timezone
 $conf['language'] = $inst->simple_query('Select language', array('en','de'), 'en');
 $conf['timezone'] = get_system_timezone();
@@ -260,7 +266,7 @@ if($install_mode == 'standard') {
 	$inst->configure_apps_vhost();
     
 	//* Configure Firewall
-	if($conf['ufw']['installed'] == true) { 
+	if(isset($conf['ufw']) && $conf['ufw']['installed'] == true) { 
 		//* Configure Ubuntu Firewall
 		$conf['services']['firewall'] = true;
 		swriteln('Configuring Ubuntu Firewall');
